@@ -26,7 +26,7 @@ from pathlib import Path
 from datetime import datetime
 from scipy.spatial.distance import cdist
 
-from biocytpy.utils.unionfind import UnionFind
+from src.cadlabutils.classes.unionfind import UnionFind
 
 
 UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"]
