@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri May  7 13:06:21 2021
-Core code obtained from Vicky Mak, Barnhart Lab
-Class structure and relative imports from Ike Ogbonna, Barnhart Lab
 @author: ike
 """
 

@@ -1,0 +1,67 @@
+[project]
+name = "your_package"
+version = "0.1.0"
+description = "python utility functions for patch-seq data analysis"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache" }
+
+authors = [
+  { name = "Ike Ogbonna", email = "Ike.Ogbonna@ucsf.edu" }
+]
+
+# Runtime dependencies (adjust as needed)
+dependencies = [
+  "numpy",
+]
+
+[project.optional-dependencies]
+reg = [
+  "pystackreg>=0.2.8",
+  "scikit-learn"
+]
+
+util2 = [
+  "matplotlib",
+  "seaborn"
+]
+
+dev = [
+  "pytest",
+  "black",
+  "ruff",
+  "mypy",
+  "your_package[util1,util2]"
+]
+
+[project.urls]
+Homepage = "https://github.com/ikestar99/cadlabutils"
+Repository = "https://github.com/ikestar99/cadlabutils"
+Issues = "https://github.com/ikestar99/cadlabutils/issues"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.mypy]
+python_version = "3.8"
+strict = true
+files = ["src", "tests"]
