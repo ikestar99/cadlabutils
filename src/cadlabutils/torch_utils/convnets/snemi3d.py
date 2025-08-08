@@ -52,18 +52,19 @@ https://doi.org/10.48550/arXiv.1409.1556
 LINEARS = (1000,)  # (4096, 4096, 1000)
 
 
-class _ResidualModule(
+class ResidualModule(
     nn.Module
 ):
     """
     Module architecture:
-    -   in  ──▶ t_0 = prep(in) ──▶ t_1 = conv0(t_0)
-                                  ├─▶ t_2 = conv1(conv2(t_1))
-    -   out ◀── post(t_3) ◀────── t_3 = t_1 + t_2 ──────────┘
+    -   in  --> t_0 = prep(in)
+    -   ........└─▶ t_1 = conv(t_0)
+    -   ............├─▶ t_2 = conv(conv(t_1))
+    -   out <-- ◀── post(t_1 + t_2) ◀───────┘
 
-    where:
-    -   t_0 = torch.tensor of size [B, c_i, Z, Y, X]
-    -   t_3 = torch.tensor of size [B, c_o, Z, Y, X]
+    Where:
+    -   t_0: tensor [B, c_i, Z, Y, X]
+    -   t_1 + t_2: tensor [B, c_o, Z, Y, X]
 
     NOTE: all ResidualModule instances take 3D spatial tensors as input, of
     shape [Batch, Channels, Z, Y, X]. For modules using 2D convolutions, this
@@ -113,7 +114,7 @@ class _ResidualModule(
                 Defaults to None, in which case module ends with residual
                 addition operation.
         """
-        super(_ResidualModule, self).__init__()
+        super(ResidualModule, self).__init__()
         self.full = full
         self.prep, self.post = prep, post
 
@@ -143,259 +144,46 @@ class _ResidualModule(
             [self.conv2(x[:, :, z]) for z in range(x.shape[2])], dim=2)
 
         # optional post-processing module
-        x = self.prep(x) if self.prep is not None else x
+        x = self.post(x) if self.post is not None else x
         return x
 
 
-class _Encoder(
+class SNEMI3DUnet(
     nn.Module
 ):
     """
     Module architecture:
-    -   in  ──▶ t_0 = conv(_ResidualModule(in))
-                ├─▶ t_1 = maxpool(_ResidualModule(t_1))
-                │   ├─▶ ...
-                │   │   ├─▶ t_n = maxpool(_ResidualModule(t_n-1))
-    -   out ◀── [t_0, t_1, ..., t_n-1, t_n] ────────────────────┘
+    -   in  --> e_0 = encode_module(in)
+    -   ........├─▶ e_1 = encode_module(e_0)
+    -   ........│...├─▶ ***intermediate encoders***
+    -   ........│...│...├─▶ e_n = encode_module(e_n-1)
+    -   ........│...│...│...└─▶ d_n-1 = decode_module(e_n) ────┐
+    -   ........│...│...d_n-2 = decode_module(d_n-1 + e_n-1) ◀─┘
+    -   ........│...***intermediate decoders***
+    -   out <-- decode_module(d_0 + e_0)) ◀───┘
 
-    where:
-    -   n = number of downsampling modules in encoder, len(convs) - 1
-    -   in = torch.tensor of size [B, c_i, Z, Y, X]
-    -   t_n = torch.tensor of size [B, c_o, Z, Y//2^n, X//2^n]
-
-    Attributes:
-        encoder (list[nn.Module, ...]):
-            2D and 3D encoding modules.
-    """
-    def __init__(
-            self,
-            c_i: int,
-            convs: tuple[int, ...],
-            act: type,
-            drop: float
-    ):
-        """
-        Args:
-            c_i (int):
-                Number of input channels.
-            convs (tuple[int, ...]):
-                Output channel sizes of convolutional layers.
-            act (type):
-                Passed to make_block function call.
-            drop (float):
-                Passed to make_block function call.
-
-        Returns:
-            encoder (tuple[nn.Module, ...]):
-                Modules included in encoder, ordered from shallow to deep.
-        """
-        super(_Encoder, self).__init__()
-        self.encoder = list(range(len(convs)))
-
-        self.encoder[0] = _ResidualModule(
-            c_i, C_MID, full=False, act=act, drop=drop, prep=make_block(
-                nn.Conv3d(C_MID, convs[0], **CONTEXT), C_MID, norm="3d",
-                act=act, drop=drop))
-        for i, c in enumerate(convs[1:]):
-            self.encoder[i+1] = _ResidualModule(
-                convs[i], c, full=True, act=act, drop=drop,
-                prep=nn.MaxPool3d(**UP_DOWN))
-
-    def forward(
-            self,
-            x: torch.tensor,
-            as_list: bool = False
-    ):
-        """
-        Forward pass through encoder.
-
-        Args:
-            x (torch.tensor):
-                Input tensor. Of shape [Batch, c_i, Z, Y, X].
-            as_list (bool, optional):
-                If True, return intermediate values as tensors.
-                Defaults to False, in which case only final output tensor
-                is returned.
-
-        Returns:
-            (list | torch.tensor):
-                Given that as_list arg is:
-                -   True, value is list of intermediate tensors. List has
-                    one output tensor per module, with the last index
-                    corresponding to the final output of the encoder.
-                -   False, value is final output tensor of encoder.
-        """
-        out_list = []
-        for e in self.encoder:
-            x = e(x)
-            out_list += [x] if as_list else []
-
-        return out_list if as_list else x
-
-
-class _Decoder(
-    nn.Module
-):
-    """
-    Module architecture:
-    -   in  ──▶ t_0 = conv(_ResidualModule(in))
-                ├─▶ t_1 = maxpool(_ResidualModule(t_1))
-                │   ├─▶ ...
-                │   │   ├─▶ t_n = maxpool(_ResidualModule(t_n-1))
-    -   out ◀── [t_0, t_1, ..., t_n-1, t_n] ────────────────────┘
-
-    where:
-    -   n = number of downsampling modules in encoder, len(convs) - 1
-    -   in = torch.tensor of size [B, c_i, Z, Y, X]
-    -   t_n = torch.tensor of size [B, c_o, Z, Y//2^n, X//2^n]
+    Where:
+    -   n: number of downsampling modules in encoder, len(convs) - 1
+    -   in: tensor [B, c_i, Z, Y, X]
+    -   e_n: tensor [B, c_o, Z, Y//2^n, X//2^n]
+    -   out: e_n or list(e_0, ..., e_n)
 
     Attributes:
-        decoder (list[nn.Module, ...]):
-            2D and 3D decoding modules.
-    """
-    def __init__(
-            self,
-            c_o: int,
-            convs: tuple[int, ...],
-            act: type,
-            drop: float
-    ):
-        """
-        Args:
-            c_o (int):
-                Number of output channels.
-            convs (tuple[int, ...]):
-                Output channel sizes of each convolutional module.
-            act (type):
-                Passed to make_block function call.
-            drop (float):
-                Passed to make_block function call.
-
-        Returns:
-            encoder (tuple[nn.Module, ...]):
-                Modules included in encoder, ordered from shallow to deep.
-        """
-        super(_Decoder, self).__init__()
-        self.decoder = list(range(len(convs)))
-
-        self.decoder[0] = _ResidualModule(
-            convs[0], C_MID, full=False, act=act, drop=drop, prep=make_block(
-                nn.Conv3d(C_MID, c_o, **CONTEXT), C_MID, norm="3d", act=act,
-                drop=drop))
-        for i, c in enumerate(convs[:-1]):
-            self.decoder[i] = _ResidualModule(
-                convs[i+1], c, full=True, act=act, drop=drop,
-                post=nn.ConvTranspose3d(c, c, **UP_DOWN))
-
-    def forward(
-            self,
-            x_list: list[torch.tensor, ...]
-    ):
-        """
-        Forward pass through encoder.
-
-        Args:
-            x_list (list[torch.tensor, ...]):
-                Tensors output by symmetric encoder.
-
-        Returns:
-            (torch.tensor):
-                Final output tensor of decoder.
-        """
-        x = x_list[-1]
-        for i in range(-1, -len(x_list) - 1, -1):
-            x = self.decoder[i](x if i == -1 else x + x_list[i])
-
-        return x
-
-
-class SNEMI3D_C(
-    nn.Module
-):
-    """
-    Module architecture
-    ---------------------------------------------------------------------------
-    in
-    └─▶ t0 = _2d_encode(in)
-        └─▶ t1 = conv(conv(t0)
-
-    t0 + t1 ◀────────────────┘
-    ---------------------------------------------------------------------------
-    in: [B, c_i, Z, Y, X], out: [B, c_o]
-
-    NOTE: SNEMI3D architecture modified for voxel-wise classification
-
+        depth (int):
+            Number of paired down/upsample modules in encoder
+        encode_n (ResidualModule):
+            nth encoding module in model.
+        decode_n (ResidualModule):
+            nth decoding module in model.
     """
     def __init__(
             self,
             c_i: int,
-            v_i: int,
             c_o: int,
-            act_c: type = nn.ELU,
-            act_l: type = nn.ReLU,
-            convs: tuple[int, ...] = None,
-            dense: tuple[int, ...] = None,
-            drop_c: float = None,
-            drop_l: float = None,
-            **kwargs
-    ):
-        """
-        Args:
-            c_i (int):
-                Number of input channels to model.
-            v_i (int):
-                Number of input z-planes to model.
-            c_o (int):
-                Number of output classes from model.
-            act_c (type, optional):
-                Nonlinear activation function within each convolutional layer.
-                Defaults to nn.ELU.
-            act_l (type, optional):
-                Nonlinear activation function within each linear layer.
-                Defaults to nn.ReLU.
-            convs (tuple[int, ...], optional)
-                Output channel sizes of convolutional layers.
-                Defaults to None, in which case sizes are (28, 36, 48, 64, 80).
-            dense (tuple[int, ...], optional)
-                Output sizes of dense linear layers.
-                Defaults to None, in which case sizes are (4096, 4096, 1000).
-            drop_c (float, optional):
-                Dropout probability within each convolutional layer.
-                Defaults to None, in which case dropout is disabled.
-            drop_l (float, optional):
-                Dropout probability within each linear layer.
-                Defaults to None, in which case dropout is disabled.
-        """
-        super(SNEMI3D_C, self).__init__()
-        convs = CHANNELS if convs is None else convs
-        dense = [convs[-1] * v_i, *(LINEARS if dense is None else dense)]
-
-        # create encoder, global pool, and dense linear modules
-        self.encoder = _Encoder(c_i, convs, act=act_c, drop=drop_c)
-        self.pooling = nn.AdaptiveAvgPool3d((None, 1, 1))
-        self.linears = nn.Sequential(
-            make_dense_net(dense, norm=True, act=act_l, drop=drop_l),
-            nn.Linear(dense[-1], c_o))
-
-    def forward(
-            self,
-            x: torch.tensor
-    ):
-        x = self.pooling(self.encoder(x, as_list=False))
-        return self.linears(torch.flatten(x, start_dim=1))
-
-
-class SNEMI3D_U(
-    nn.Module
-):
-    """SNEMI3D architecture modified for semantic segmentation."""
-    def __init__(
-            self,
-            c_i: int,
-            c_o: int,
+            c_m: int = C_MID,
+            c_l: tuple[int, ...] = CHANNELS,
             act: type = nn.ELU,
             drop: float = None,
-            convs: tuple[int, ...] = None,
     ):
         """
         Args:
@@ -410,43 +198,191 @@ class SNEMI3D_U(
             drop (float, optional):
                 Dropout probability. If None, dropout is disabled.
                 Defaults to 0.1.
-            convs (tuple[int, ...], optional)
+            c_l (tuple[int, ...], optional)
                 Output channel sizes of convolutional layers.
                 Defaults to None, in which case sizes are (28, 36, 48, 64, 80).
         """
-        super(SNEMI3D_U, self).__init__()
-        convs = CHANNELS if convs is None else convs
+        super(SNEMI3DUnet, self).__init__()
+        self.depth = len(c_l)
 
-        # create encoder and decoder modules
-        self.encoder = _Encoder(c_i, convs, act=act, drop=drop)
-        self.decoder = _Decoder(c_o, convs, act=act, drop=drop)
+        # paired anisotropic input/output modules
+        self.encode_0 = ResidualModule(
+            c_m, c_l[0], full=False, act=act, drop=drop, prep=make_block(
+                nn.Conv3d(c_i, c_m, **CONTEXT), c_m, norm="3d",
+                act=act, drop=drop))
+        self.decode_0 = ResidualModule(
+            c_l[0], c_m, full=False, act=act, drop=drop, post=make_block(
+                nn.Conv3d(c_m, c_o, **CONTEXT), c_o, norm="3d", act=act,
+                drop=drop))
+
+        # create paired encoder and decoder modules
+        for i in range(1, len(c_l)):
+            self._add_module("encode", i, c_l[i - 1], c_l[i], act, drop)
+            self._add_module("decode", i, c_l[i], c_l[i - 1], act, drop)
+
+    def _add_module(
+            self,
+            arm: str,
+            depth: int,
+            c_i: int,
+            c_o: int,
+            act: type,
+            drop: float
+    ):
+        """
+        Module architecture:
+        -   encode: e_1 = _ResidualModule(maxpool(e_0))
+        -   decode: e_0 = convtranspose(_ResidualModule(e_1))
+
+        where:
+        -   e_0 = tensor [B, c_o, Z, Y, X]
+        -   e_1 = tensor [B, c_o, Z, Y//2, X//2]
+
+        Args:
+            arm (str):
+                One of two possible values:
+                -   "encode" for downsampling (maxpool) module
+                -   "decode" for upsampling (convtranspose) module.
+            depth (int):
+                Number of downsample operations between raw input and output
+                of encode module.
+            c_i (int):
+                Number of input channels to encoding module.
+            c_o (int):
+                Number of output channels from encoding module.
+            act (type):
+                See __init__.
+            drop (float):
+                See __init__.
+        """
+        kwargs = {
+            "encode": {"prep": nn.MaxPool3d(**UP_DOWN)},
+            "decode": {"post": nn.ConvTranspose3d(c_o, c_o, **UP_DOWN)}}[arm]
+        setattr(self, f"{arm}_{depth}", ResidualModule(
+            c_i, c_o, full=True, act=act, drop=drop, **kwargs))
+
+    def forward(
+            self,
+            x: torch.tensor,
+            decode: bool = True
+    ):
+        """
+        Forward pass.
+
+        Args:
+            x (torch.tensor):
+                Input tensor.
+            decode (bool, optional):
+                If True, run output of encoding network through symmetric
+                decoder.
+                Defaults to True.
+
+        Returns:
+            (torch.tensor):
+                Output tensor following these operations:
+                -   decode False: x --> encoder
+                -   decode True: x --> encoder --> decoder
+        """
+        out = {0: self.encode_0(x)}
+        for i in range(1, self.depth):
+            out[i*int(decode)] = getattr(self, f"encode_{i}")(
+                out[(i-1)*int(decode)])
+
+        if decode:
+            out[self.depth - 1] = getattr(
+                self, f"decode_{self.depth - 1}")(out[self.depth - 1])
+            for i in range(self.depth - 2, -1, -1):
+                out[i] = getattr(self, f"decode_{i}")(out[i] + out[i+1])
+
+        return out[0]
+
+
+class SNEMI3DClassifier(
+    nn.Module
+):
+    """
+    Module architecture:
+    -   in  --> t_0 = avgpool(SNEMI3DUnet_encoder(in)) ──┐
+    -   out <-- ◀── dense_network(t_1) ◀─────────────────┘
+
+    Where:
+    -   in = tensor [B, c_i, Z, Y, X]
+    -   t_0 = tensor [B, c_i, Z, 1, 1]
+    -   out = tensor [B, c_i, Z, 1, 1]
+
+    Attributes:
+        encoder (SNEMI3DUnet):
+            Encoding model.
+        pooling (nn.Module):
+            pooling module.
+        percept (nn.Module):
+            Dense linear classifier.
+    """
+    def __init__(
+            self,
+            c_i: int,
+            v_i: int,
+            c_o: int,
+            c_l: tuple[int, ...] = CHANNELS,
+            d_l: tuple[int, ...] = LINEARS,
+            act_c: type = nn.ELU,
+            act_l: type = nn.ReLU,
+            drop_c: float = None,
+            drop_l: float = None,
+            **kwargs
+    ):
+        """
+        Args:
+            c_i (int):
+                Number of input channels to model.
+            v_i (int):
+                Number of input z-planes to model.
+            c_o (int):
+                Number of output classes from model.
+            c_l (tuple[int, ...], optional)
+                Output channel sizes of convolutional layers.
+                Defaults to None, in which case sizes are (28, 36, 48, 64, 80).
+            d_l (tuple[int, ...], optional)
+                Output sizes of dense linear layers.
+                Defaults to None, in which case sizes are (4096, 4096, 1000).
+            act_c (type, optional):
+                Nonlinear activation function within each convolutional layer.
+                Defaults to nn.ELU.
+            act_l (type, optional):
+                Nonlinear activation function within each linear layer.
+                Defaults to nn.ReLU.
+            drop_c (float, optional):
+                Dropout probability within each convolutional layer.
+                Defaults to None, in which case dropout is disabled.
+            drop_l (float, optional):
+                Dropout probability within each linear layer.
+                Defaults to None, in which case dropout is disabled.
+        """
+        super(SNEMI3DClassifier, self).__init__()
+        d_l = [c_l[-1] * v_i, *d_l]
+
+        # create encoder, global pool, and dense linear modules
+        self.encoder = SNEMI3DUnet(
+            c_i=c_i, c_o=c_i, c_l=c_l, act=act_c, drop=drop_c)
+        self.pooling = nn.AdaptiveAvgPool3d((None, 1, 1))
+        self.percept = nn.Sequential(
+            make_dense_net(d_l, norm=True, act=act_l, drop=drop_l),
+            nn.Linear(d_l[-1], c_o))
 
     def forward(
             self,
             x: torch.tensor
     ):
-        return self.decoder(self.encoder(x, as_list=True))
+        """
+        Forward pass.
 
+        Args:
+            x (torch.tensor):
+                Input tensor.
 
-def __main__():
-    voxel = (16, 32, 32)
-    model_c = SNEMI3D_C(c_in=1, v_i=32, c_out=3)
-    model_3 = SNEMI3D_U(c_in=1, c_out=2)
-
-    c_params = sum(p.numel() for p in model_c.parameters() if p.requires_grad)
-    u_params = sum(p.numel() for p in model_3.parameters() if p.requires_grad)
-    print(f"classifier: {c_params} params\nunet: {u_params} params")
-
-    model_c.eval()
-    model_3.eval()
-    with torch.no_grad():
-        import numpy as np
-        temp = torch.from_numpy(np.random.rand(64, 1, *voxel)).float()
-        out_c = model_c(temp)
-        out_3 = model_3(temp)
-
-        print(f"classifier output: {out_c.shape}\nunet output: {out_3.shape}")
-
-
-if __name__ == "__main__":
-    __main__()
+        Returns:
+            (torch.tensor):
+                Output tensor.
+        """
+        x = self.pooling(self.encoder(x, decode=False))
+        return self.percept(torch.flatten(x, start_dim=1))

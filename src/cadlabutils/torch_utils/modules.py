@@ -52,7 +52,7 @@ def make_block(
 
 
 def make_dense_net(
-        c_all: list,
+        c_all: list[int, ...],
         norm: bool,
         act: type = None,
         drop: float = None
@@ -82,4 +82,5 @@ def make_dense_net(
     mlp = [
         make_block(nn.Linear(c_all[i], c), c, norm=norm, act=act, drop=drop)
         for i, c in enumerate(c_all[1:])]
-    return nn.Sequential(*mlp)
+    mlp = mlp[0] if len(mlp) == 1 else nn.Sequential(*mlp)
+    return mlp
