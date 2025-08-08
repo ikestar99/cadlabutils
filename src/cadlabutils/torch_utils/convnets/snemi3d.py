@@ -40,7 +40,7 @@ CONTEXT = {"kernel_size": (1, 5, 5), "stride": 1, "padding": (0, 2, 2)}
 UP_DOWN = {"kernel_size": (1, 2, 2), "stride": (1, 2, 2)}
 # Feature map density of convolutional layers
 CHANNELS = (28, 36, 48, 64, 80)
-C_MIDDLE = 18
+C_MID = 18
 
 
 """
@@ -56,9 +56,14 @@ class _ResidualModule(
     nn.Module
 ):
     """
-    Simple residual module built on 2 or 3D convolution blocks. Includes a
-    residual skip (addition) connections between outputs of first and last
-    convolution blocks.
+    Module architecture:
+    -   in  ──▶ t_0 = prep(in) ──▶ t_1 = conv0(t_0)
+                                  ├─▶ t_2 = conv1(conv2(t_1))
+    -   out ◀── post(t_3) ◀────── t_3 = t_1 + t_2 ──────────┘
+
+    where:
+    -   t_0 = torch.tensor of size [B, c_i, Z, Y, X]
+    -   t_3 = torch.tensor of size [B, c_o, Z, Y, X]
 
     NOTE: all ResidualModule instances take 3D spatial tensors as input, of
     shape [Batch, Channels, Z, Y, X]. For modules using 2D convolutions, this
@@ -68,24 +73,30 @@ class _ResidualModule(
     shape as the original.
 
     Attributes:
+        prep (nn.Module | None):
+            Optional preparatory operation.
         conv1 (nn.Module):
             First convolution block.
         conv2 (nn.Module):
             Second and third convolution blocks.
+        post (nn.Module | None):
+            Optional post-processing operation.
     """
     def __init__(
             self,
-            c_in: int,
-            c_out: int,
+            c_i: int,
+            c_o: int,
             full: bool,
             act: type,
-            drop: float
+            drop: float,
+            prep: nn.Module = None,
+            post: nn.Module = None
     ):
         """
         Args:
-            c_in (int):
+            c_i (int):
                 Number of channels in input tensor.
-            c_out (int):
+            c_o (int):
                 Number of output channels from final convolution block.
             full (bool):
                 If True, use 3D convolutions. If false, use 2D convolutions.
@@ -93,143 +104,228 @@ class _ResidualModule(
                 Nonlinear activation function to use.
             drop (float):
                 Dropout probability.
+            prep (nn.Module, optional):
+                Preparatory operation before first layer in module.
+                Defaults to None, in which case module begins with first
+                anisotropic convolution layer.
+            post (nn.Module, optional):
+                Post-processing operation after final layer in module.
+                Defaults to None, in which case module ends with residual
+                addition operation.
         """
         super(_ResidualModule, self).__init__()
         self.full = full
+        self.prep, self.post = prep, post
 
         conv, k, p, n = (nn.Conv3d, (1, 3, 3), (0, 1, 1), "3d") if full else (
             nn.Conv2d, 3, 1, "2d")
         self.conv1 = make_block(
-            conv(c_in, c_out, kernel_size=k, stride=1, padding=p),
-            c_out, norm=n, act=act, drop=drop)
+            conv(c_i, c_o, kernel_size=k, stride=1, padding=p),
+            c_o, norm=n, act=act, drop=drop)
         self.conv2 = nn.Sequential(*[
             make_block(
-                conv(c_out, c_out, kernel_size=3, stride=1, padding=1),
-                c_out, norm=n, act=act, drop=drop) for _ in range(2)])
+                conv(c_o, c_o, kernel_size=3, stride=1, padding=1),
+                c_o, norm=n, act=act, drop=drop) for _ in range(2)])
 
     def forward(
             self,
-            x: torch.tensor  # <B, C, Z, Y, X>
+            x: torch.tensor
     ):
-        if self.full:
-            x = self.conv1(x)
-            o = self.conv2(x)
-        else:
-            x = torch.stack(
-                [self.conv1(x[:, :, z]) for z in range(x.shape[2])], dim=2)
-            o = torch.stack(
-                [self.conv2(x[:, :, z]) for z in range(x.shape[2])], dim=2)
+        # optional preparatory module
+        x = self.prep(x) if self.prep is not None else x
 
-        return x + o
+        # initial convolution
+        x = self.conv1(x) if self.full else torch.stack(
+            [self.conv1(x[:, :, z]) for z in range(x.shape[2])], dim=2)
+
+        # final convolution block with residual connection
+        x += self.conv2(x) if self.full else torch.stack(
+            [self.conv2(x[:, :, z]) for z in range(x.shape[2])], dim=2)
+
+        # optional post-processing module
+        x = self.prep(x) if self.prep is not None else x
+        return x
 
 
-def _2d_module(
-        c_i: int,
-        c_m: int,
-        c_o: int,
-        act: type,
-        drop: float,
-        encode: bool
+class _Encoder(
+    nn.Module
 ):
     """
-    Create 2D anisotropic module for use in encoder or decoder.
+    Module architecture:
+    -   in  ──▶ t_0 = conv(_ResidualModule(in))
+                ├─▶ t_1 = maxpool(_ResidualModule(t_1))
+                │   ├─▶ ...
+                │   │   ├─▶ t_n = maxpool(_ResidualModule(t_n-1))
+    -   out ◀── [t_0, t_1, ..., t_n-1, t_n] ────────────────────┘
 
-    Args:
-        c_i (int):
-            Number of input channels.
-        c_m (int):
-            Number of intermediate channels.
-        c_o (int):
-            Number of output channels.
-        act (type):
-            Passed to make_block function call.
-        drop (float):
-            Passed to make_block function call.
-        encode (bool):
-            If True, preparatory convolution comes before residual module. If
-            False, order is reversed.
+    where:
+    -   n = number of downsampling modules in encoder, len(convs) - 1
+    -   in = torch.tensor of size [B, c_i, Z, Y, X]
+    -   t_n = torch.tensor of size [B, c_o, Z, Y//2^n, X//2^n]
 
-    Returns:
-        module (nn.Module):
-            Module of specified type.
+    Attributes:
+        encoder (list[nn.Module, ...]):
+            2D and 3D encoding modules.
     """
-    c0, c1 = ([c_i, c_m], [c_m, c_o]) if encode else ([c_m, c_o], [c_i, c_m])
-    module = [
-        make_block(
-            nn.Conv3d(*c0, **CONTEXT), c0[1], norm="3d", act=act, drop=drop),
-        _ResidualModule(*c1, full=False, act=act, drop=drop)]
-    return nn.Sequential(*(module if encode else module[::-1]))
+    def __init__(
+            self,
+            c_i: int,
+            convs: tuple[int, ...],
+            act: type,
+            drop: float
+    ):
+        """
+        Args:
+            c_i (int):
+                Number of input channels.
+            convs (tuple[int, ...]):
+                Output channel sizes of convolutional layers.
+            act (type):
+                Passed to make_block function call.
+            drop (float):
+                Passed to make_block function call.
+
+        Returns:
+            encoder (tuple[nn.Module, ...]):
+                Modules included in encoder, ordered from shallow to deep.
+        """
+        super(_Encoder, self).__init__()
+        self.encoder = list(range(len(convs)))
+
+        self.encoder[0] = _ResidualModule(
+            c_i, C_MID, full=False, act=act, drop=drop, prep=make_block(
+                nn.Conv3d(C_MID, convs[0], **CONTEXT), C_MID, norm="3d",
+                act=act, drop=drop))
+        for i, c in enumerate(convs[1:]):
+            self.encoder[i+1] = _ResidualModule(
+                convs[i], c, full=True, act=act, drop=drop,
+                prep=nn.MaxPool3d(**UP_DOWN))
+
+    def forward(
+            self,
+            x: torch.tensor,
+            as_list: bool = False
+    ):
+        """
+        Forward pass through encoder.
+
+        Args:
+            x (torch.tensor):
+                Input tensor. Of shape [Batch, c_i, Z, Y, X].
+            as_list (bool, optional):
+                If True, return intermediate values as tensors.
+                Defaults to False, in which case only final output tensor
+                is returned.
+
+        Returns:
+            (list | torch.tensor):
+                Given that as_list arg is:
+                -   True, value is list of intermediate tensors. List has
+                    one output tensor per module, with the last index
+                    corresponding to the final output of the encoder.
+                -   False, value is final output tensor of encoder.
+        """
+        out_list = []
+        for e in self.encoder:
+            x = e(x)
+            out_list += [x] if as_list else []
+
+        return out_list if as_list else x
 
 
-def _3d_module(
-        c_i: int,
-        c_o: int,
-        act: type,
-        drop: float,
-        encode: bool
+class _Decoder(
+    nn.Module
 ):
     """
-    Create 3D anisotropic module for use in encoder or decoder.
+    Module architecture:
+    -   in  ──▶ t_0 = conv(_ResidualModule(in))
+                ├─▶ t_1 = maxpool(_ResidualModule(t_1))
+                │   ├─▶ ...
+                │   │   ├─▶ t_n = maxpool(_ResidualModule(t_n-1))
+    -   out ◀── [t_0, t_1, ..., t_n-1, t_n] ────────────────────┘
 
-    Args:
-        c_i (int):
-            Number of input channels.
-        c_o (int):
-            Number of output channels.
-        act (type):
-            Passed to make_block function call.
-        drop (float):
-            Passed to make_block function call.
-        encode (bool):
-            If True, return encoder module with spatial downsampling. If False,
-            return decoder module with spatial upsampling.
+    where:
+    -   n = number of downsampling modules in encoder, len(convs) - 1
+    -   in = torch.tensor of size [B, c_i, Z, Y, X]
+    -   t_n = torch.tensor of size [B, c_o, Z, Y//2^n, X//2^n]
 
-    Returns:
-        module (nn.Module):
-            Module of specified type.
+    Attributes:
+        decoder (list[nn.Module, ...]):
+            2D and 3D decoding modules.
     """
-    module = [
-        nn.MaxPool3d(**UP_DOWN) if encode else None,
-        _ResidualModule(c_i, c_o, full=True, act=act, drop=drop),
-        nn.ConvTranspose3d(c_o, c_o, **UP_DOWN) if not encode else None]
-    return nn.Sequential(*[x for x in module if x is not None])
+    def __init__(
+            self,
+            c_o: int,
+            convs: tuple[int, ...],
+            act: type,
+            drop: float
+    ):
+        """
+        Args:
+            c_o (int):
+                Number of output channels.
+            convs (tuple[int, ...]):
+                Output channel sizes of each convolutional module.
+            act (type):
+                Passed to make_block function call.
+            drop (float):
+                Passed to make_block function call.
 
+        Returns:
+            encoder (tuple[nn.Module, ...]):
+                Modules included in encoder, ordered from shallow to deep.
+        """
+        super(_Decoder, self).__init__()
+        self.decoder = list(range(len(convs)))
 
-def _encoder(
-        c_i: int,
-        convs: tuple[int, ...],
-        act: type,
-        drop: float
-):
-    """
-    Create encoder with stacked 2D and 3D encoding modules.
+        self.decoder[0] = _ResidualModule(
+            convs[0], C_MID, full=False, act=act, drop=drop, prep=make_block(
+                nn.Conv3d(C_MID, c_o, **CONTEXT), C_MID, norm="3d", act=act,
+                drop=drop))
+        for i, c in enumerate(convs[:-1]):
+            self.decoder[i] = _ResidualModule(
+                convs[i+1], c, full=True, act=act, drop=drop,
+                post=nn.ConvTranspose3d(c, c, **UP_DOWN))
 
-    Args:
-        c_i (int):
-            Number of input channels.
-        convs (tuple[int, ...]):
-            Output channel sizes of convolutional layers.
-        act (type):
-            Passed to make_block function call.
-        drop (float):
-            Passed to make_block function call.
+    def forward(
+            self,
+            x_list: list[torch.tensor, ...]
+    ):
+        """
+        Forward pass through encoder.
 
-    Returns:
-        encoder (tuple[nn.Module, ...]):
-            Modules included in encoder, ordered from shallow to deep.
-    """
-    encoder = [
-        _2d_module(c_i, C_MIDDLE, convs[0], act=act, drop=drop, encode=True)]
-    encoder += [
-        _3d_module(convs[i], c, act=act, drop=drop, encode=True)
-        for i, c in enumerate(convs[1:])]
-    return tuple(encoder)
+        Args:
+            x_list (list[torch.tensor, ...]):
+                Tensors output by symmetric encoder.
+
+        Returns:
+            (torch.tensor):
+                Final output tensor of decoder.
+        """
+        x = x_list[-1]
+        for i in range(-1, -len(x_list) - 1, -1):
+            x = self.decoder[i](x if i == -1 else x + x_list[i])
+
+        return x
 
 
 class SNEMI3D_C(
     nn.Module
 ):
-    """SNEMI3D architecture modified for voxel classification."""
+    """
+    Module architecture
+    ---------------------------------------------------------------------------
+    in
+    └─▶ t0 = _2d_encode(in)
+        └─▶ t1 = conv(conv(t0)
+
+    t0 + t1 ◀────────────────┘
+    ---------------------------------------------------------------------------
+    in: [B, c_i, Z, Y, X], out: [B, c_o]
+
+    NOTE: SNEMI3D architecture modified for voxel-wise classification
+
+    """
     def __init__(
             self,
             c_i: int,
@@ -274,15 +370,10 @@ class SNEMI3D_C(
         convs = CHANNELS if convs is None else convs
         dense = [convs[-1] * v_i, *(LINEARS if dense is None else dense)]
 
-        # create encoder
-        self.e = nn.Sequential(
-            *_encoder(c_i, convs, act=act_c, drop=drop_c))
-
-        # create adaptive pool layer across final 2 dimensions
-        self.p = nn.AdaptiveAvgPool3d((None, 1, 1))
-
-        # create multi-layer perceptron classifier
-        self.d = nn.Sequential(
+        # create encoder, global pool, and dense linear modules
+        self.encoder = _Encoder(c_i, convs, act=act_c, drop=drop_c)
+        self.pooling = nn.AdaptiveAvgPool3d((None, 1, 1))
+        self.linears = nn.Sequential(
             make_dense_net(dense, norm=True, act=act_l, drop=drop_l),
             nn.Linear(dense[-1], c_o))
 
@@ -290,26 +381,27 @@ class SNEMI3D_C(
             self,
             x: torch.tensor
     ):
-        return self.d(torch.flatten(self.p(self.e(x)), start_dim=1))
+        x = self.pooling(self.encoder(x, as_list=False))
+        return self.linears(torch.flatten(x, start_dim=1))
 
 
-class UNetSNEMI3D(
+class SNEMI3D_U(
     nn.Module
 ):
     """SNEMI3D architecture modified for semantic segmentation."""
     def __init__(
             self,
-            c_in: int,
-            c_out: int,
+            c_i: int,
+            c_o: int,
             act: type = nn.ELU,
             drop: float = None,
             convs: tuple[int, ...] = None,
     ):
         """
         Args:
-            c_in (int):
+            c_i (int):
                 Number of input channels in first layer of model.
-            c_out (int):
+            c_o (int):
                 Number of output channels in final layer of model. Corresponds
                 to number of object classes in input images.
             act (type, optional):
@@ -322,59 +414,24 @@ class UNetSNEMI3D(
                 Output channel sizes of convolutional layers.
                 Defaults to None, in which case sizes are (28, 36, 48, 64, 80).
         """
-        super(UNetSNEMI3D, self).__init__()
+        super(SNEMI3D_U, self).__init__()
         convs = CHANNELS if convs is None else convs
-        self.depth = len(convs) - 1
 
-        # preparatory anisotropic convolution module
-        self.first = nn.Sequential(
-            make_block(
-                nn.Conv3d(c_in, convs[0], **CONTEXT),
-                convs[0], norm="3d", act=act, drop=drop),
-            _ResidualModule(
-                convs[0], convs[0], full=False, act=act, drop=drop))
-
-        # create down sampling modules
-        for i, w in enumerate(convs[1:]):
-            setattr(self, f"encode_{i}", nn.Sequential(
-                nn.MaxPool3d(**UP_DOWN),
-                _ResidualModule(convs[i], w, full=True, act=act, drop=drop)))
-
-        # create up sampling modules
-        for i, w in enumerate(convs[-2::-1]):
-            setattr(self, f"decode_{i}", nn.Sequential(
-                _ResidualModule(
-                    convs[-(i + 1)], w, full=True, act=act, drop=drop),
-                nn.ConvTranspose3d(w, w, **UP_DOWN)))
-
-        # final anisotropic convolution module
-        self.final = nn.Sequential(
-            _ResidualModule(
-                convs[0], convs[0], full=False, act=act, drop=drop),
-            make_block(
-                nn.Conv3d(convs[0], c_out, **CONTEXT),
-                c_out, norm="3d", act=act, drop=drop))
+        # create encoder and decoder modules
+        self.encoder = _Encoder(c_i, convs, act=act, drop=drop)
+        self.decoder = _Decoder(c_o, convs, act=act, drop=drop)
 
     def forward(
             self,
             x: torch.tensor
     ):
-        # encoder arm, save intermediate outputs
-        skips = [self.first(x)]
-        for i in range(self.depth):
-            skips += [getattr(self, f"encode_{i}")(skips[-1])]
-
-        # decoder arm, add intermediate outputs
-        for i, s in enumerate(skips[:0:-1]):
-            x = getattr(self, f"decode_{i}")(s if i == 0 else x + s)
-
-        return self.final(x + skips[0])
+        return self.decoder(self.encoder(x, as_list=True))
 
 
 def __main__():
     voxel = (16, 32, 32)
-    model_c = SNEMI3D_C(c_in=1, c_out=3)
-    model_3 = UNetSNEMI3D(c_in=1, c_out=2)
+    model_c = SNEMI3D_C(c_in=1, v_i=32, c_out=3)
+    model_3 = SNEMI3D_U(c_in=1, c_out=2)
 
     c_params = sum(p.numel() for p in model_c.parameters() if p.requires_grad)
     u_params = sum(p.numel() for p in model_3.parameters() if p.requires_grad)
