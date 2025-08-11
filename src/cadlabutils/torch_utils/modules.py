@@ -51,8 +51,8 @@ def make_block(
     return nn.Sequential(*[x for x in layers if x is not None])
 
 
-def make_dense_net(
-        c_all: list[int, ...],
+def make_dense(
+        c_all: list[int],
         norm: bool,
         act: type = None,
         drop: float = None
@@ -61,7 +61,7 @@ def make_dense_net(
     Create a sequential neural network with dense layers.
 
     Args:
-        c_all (list):
+        c_all (list[int]):
             Channels in each dense layer. Total network has len(channels) - 1
             layers, where layer[i] has channels[i] input and channels[i + 1]
             output channels.
