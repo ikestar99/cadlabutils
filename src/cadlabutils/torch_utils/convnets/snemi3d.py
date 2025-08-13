@@ -121,7 +121,7 @@ class ResidualModule(
         return x
 
 
-class SNEMI3DUNet(
+class SNEMI3D(
     nn.Module
 ):
     """
@@ -176,7 +176,7 @@ class SNEMI3DUNet(
                 Dropout probability. If None, dropout is disabled.
                 Defaults to 0.1.
         """
-        super(SNEMI3DUNet, self).__init__()
+        super(SNEMI3D, self).__init__()
         self.depth = len(c_t)
 
         # paired anisotropic input/output modules
@@ -275,7 +275,7 @@ class SNEMI3DUNet(
 
 
 class SNEMI3DClassifier(
-    SNEMI3DUNet
+    SNEMI3D
 ):
     """
     Model architecture:

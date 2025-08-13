@@ -29,13 +29,6 @@ from scipy.spatial.distance import cdist
 from src.cadlabutils.unionfind import UnionFind
 
 
-UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"]
-
-
-
-
-
-
 def save_tif(
         array: np.ndarray,
         file: Path,

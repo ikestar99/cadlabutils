@@ -8,9 +8,7 @@ Created on Wed Jan 22 09:00:00 2025
 
 import os
 import time
-import numpy as np
 import platform
-import tracemalloc as tm
 import rich.progress as rp
 
 from datetime import datetime
@@ -71,14 +69,14 @@ def current_date_time(
 
 
 def elapsed_time(
-        count: float
+        start: float
 ):
     """
-    Convert elapsed time in seconds to time in hours, minutes, seconds.
+    Calculate elapsed time in hours, minutes, seconds.
 
     Args:
-        count (float):
-            Elapsed time in seconds.
+        start (float):
+            Start time in seconds.
 
     Returns:
         h (int):
@@ -90,6 +88,6 @@ def elapsed_time(
         (str):
             Elapsed time in hh:mm:ss.ss format.
     """
-    h, r = divmod(count, 3600)
+    h, r = divmod(time.time() - start, 3600)
     m, s = divmod(r, 60)
     return h, m, s, f"{int(h):02}:{int(m):02}:{s:05.2f}"
