@@ -209,12 +209,14 @@ def simulate_batch_size(
         model (nn.Module):
             Model with which to perform inference.
         sample (torch.tensor):
-            Input data on which to run inference.
+            Input data on which to run inference. Should not include a batch
+            dimension.
         device (torch.device, optional):
             Device for which to compute an optimum batch size.
             Defaults to torch.device("cpu").
         target (torch.tensor, optional):
-            Ground truth labels corresponding to the input samples.
+            Ground truth labels corresponding to the input samples. Should not
+            include a batch dimension.
             Defaults to None, in which case loss is not computed.
         criterion (nn.Module, optional):
             Instantiated loss function. Passed to forward_pass function.
@@ -228,54 +230,48 @@ def simulate_batch_size(
             Defaults to 0.75.
 
     Returns:
-        optimum (int):
-            Optimum batch size.
+        (int):
+            Scaled peak batch size.
     """
-    sizes = [start_size]
+    bs_l, bs_h = start_size, start_size
     binary_search = False
     sample = sample.unsqueeze(0)
-    target = None if target is None else target.unsqueeze(0)
+    target = target.unsqueeze(0) if target is not None else None
     model = model.to(device, dtype=sample.dtype)
+
+    # loop until optimum value found
     while True:
-        try_sample = sample.repeat(*(sizes[-1:] + [1] * sample.dim()))
-        try_target = None if target is None else target.repeat(
-            *(sizes[-1:] + [1] * target.dim()))
+        # generate synthetic batch data
+        try_sample = sample.expand(bs_h, *sample.shape[1:])
+        try_target = None if target is None else target.expand(
+            bs_h, *target.shape[1:])
+
+        # stop if binary search active and no additional increase possible
+        delta = (bs_h - bs_l) // 2
+        if binary_search and delta <=1:
+            return int(bs_l * scalar)
+
         try:
-            forward_pass(
+            # forward pass w/o backpropagation and optimization
+            _, _ = forward_pass(
                 model, sample=try_sample, target=try_target, device=device,
                 criterion=criterion, optimizer=optimizer,
                 sample_dtype=sample.dtype,
                 target_dtype=target.dtype if target is not None else None)
-            sizes += [sizes[-1] * 2 ]
-            max_bs = bs
-            bs *= 2  # try bigger
+
+            # if successful, current high becomes new low
+            bs_l = bs_h
+            bs_h += delta if binary_search else bs_h
+
         except RuntimeError as e:
-            if "CUDA out of memory" in str(e):
-                break
+            if "memory" in str(e).lower():
+                # if memory error detected, switch to binary search
+                binary_search = True
+                bs_h -= delta
             else:
                 raise e
 
-    # Binary search refinement
-    low, high = max_bs, bs
-    while low + 1 < high:
-        mid = (low + high) // 2
-        try:
+        finally:
+            # clean up GPU memory for next sweep
+            del try_sample, try_target
             torch.cuda.empty_cache()
-            optimizer = torch.optim.Adam(model.parameters())
-            x = torch.randn((mid, 1, *voxel), device=device).double()
-            target = torch.randint(0, len(balance), (mid,), device=device).long()
-
-            optimizer.zero_grad()
-            out = model(x)
-            loss = loss_fn(out, target)
-            loss.backward()
-            optimizer.step()
-
-            low = mid
-        except RuntimeError as e:
-            if "CUDA out of memory" in str(e):
-                high = mid
-            else:
-                raise e
-
-    return low
