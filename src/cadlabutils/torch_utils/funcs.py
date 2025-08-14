@@ -9,8 +9,10 @@ Created on Wed Aug 06 09:00:00 2025
 import torch
 import torch.nn as nn
 
+from pathlib import Path
 from torch.optim import Optimizer
 from torch.utils.data import Dataset, DataLoader
+from safetensors.torch import save_file, load_file
 
 
 """
@@ -248,7 +250,7 @@ def simulate_batch_size(
 
         # stop if binary search active and no additional increase possible
         delta = (bs_h - bs_l) // 2
-        if binary_search and delta <=1:
+        if binary_search and delta <= 1:
             return int(bs_l * scalar)
 
         try:
@@ -275,3 +277,30 @@ def simulate_batch_size(
             # clean up GPU memory for next sweep
             del try_sample, try_target
             torch.cuda.empty_cache()
+
+
+def _save_checkpoint(
+        file: Path,
+        model: nn.module,
+        epoch: int,
+        **kwargs
+):
+    """
+    Save model parameters in a checkpoint.pth file.
+
+    Args:
+        epoch (int):
+            Training epoch after which to save model parameters.
+    """
+    saved = {} if not self.checkpoint_pth.is_file() else torch.load(
+        self.checkpoint_pth)
+    states = {
+        "model": self.model.state_dict(), "epoch": epoch,
+        "optimizer": (
+            self.optim.state_dict() if self.optim is not None else None),
+        "scheduler": (
+            self.sched.state_dict() if self.sched is not None
+            else None)}
+    saved[self.model_name] = {
+        k: v for k, v in states.items() if v is not None}
+    torch.save(saved, self.checkpoint_pth)
