@@ -128,6 +128,19 @@ def get_h5_shape(
     return shape
 
 
+# def print_hdf5_structure(file_path):
+#     """Prints the structure of an HDF5 file."""
+#     with h5.File(file_path, 'r') as hf:
+#         def print_item(name, obj):
+#             tabs = name.count("/")
+#             start = name.rindex("/") + 1 if tabs > 0 else 0
+#             shape = obj.shape if isinstance(obj, h5.Dataset) else ""
+#             print(f"{"    " * tabs}{name[start:]} {shape}")
+#
+#         print(f"Structure of HDF5 file: {file_path}")
+#         hf.visititems(print_item)
+
+
 def project_h5(
         file: Path,
         name: str,

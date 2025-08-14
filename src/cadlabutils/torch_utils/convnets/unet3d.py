@@ -63,6 +63,7 @@ class UNet3D(
             c_t: tuple[int] = CHANNELS,
             act: type = nn.ReLU,
             drop: float = None,
+            **kwargs
     ):
         """
         Args:

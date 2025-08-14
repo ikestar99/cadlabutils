@@ -156,6 +156,7 @@ class SNEMI3D(
             c_t: tuple[int] = CHANNELS,
             act: type = nn.ELU,
             drop: float = None,
+            **kwargs
     ):
         """
         Args:
