@@ -282,7 +282,6 @@ def simulate_batch_size(
 def _save_checkpoint(
         file: Path,
         model: nn.module,
-        epoch: int,
         **kwargs
 ):
     """
