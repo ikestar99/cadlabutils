@@ -42,15 +42,15 @@ def count_parameters(
 
 
 def get_device(
-        gpu: int = 0
+        gpu: int | None = 0
 ):
     """
     Identify a CUDA-enabled device on which to perform parallelized
     computations. Will use CPU if CUDA and/or GPU are unavailable.
 
     Args:
-        gpu (int, optional):
-            Index of CUDA device to use.
+        gpu (int | None, optional):
+            Index of CUDA device to use. if None, use CPU.
             Defaults to 0.
 
     Returns:
@@ -99,7 +99,7 @@ def set_mode(
         model: nn.Module,
         train: bool,
         device: torch.device,
-        model_dtype: torch.dtype = torch.float32,
+        dtype: torch.dtype = torch.float32,
 ):
     """
     Prepare model for either train or test passes.
@@ -113,7 +113,7 @@ def set_mode(
             computation graph.
         device (torch.device):
             Device on which to perform computations.
-        model_dtype (torch.dtype, optional):
+        dtype (torch.dtype, optional):
             Datatype of model parameters.
             Defaults to torch.float32, or single-precision.
 
@@ -122,7 +122,7 @@ def set_mode(
             Model with which to perform inference, prepared for specified mode
             and transferred to device with indicated precision.
     """
-    model = model.to(device, dtype=model_dtype)
+    model = model.to(device, dtype=dtype)
     model = model.train() if train else model.eval()
     torch.set_grad_enabled(train)
     return model
@@ -131,8 +131,8 @@ def set_mode(
 def forward_pass(
         model: nn.Module,
         sample: torch.tensor,
+        device: torch.device,
         target: torch.tensor = None,
-        device: torch.device = torch.device("cpu"),
         criterion: nn.Module = None,
         optimizer: Optimizer = None,
         sample_dtype: torch.dtype = torch.float32,
@@ -146,12 +146,11 @@ def forward_pass(
             Model with which to perform inference.
         sample (torch.tensor):
             Input data on which to run inference.
+        device (torch.device, optional):
+            Device on which to perform inference.
         target (torch.tensor, optional):
             Ground truth labels corresponding to the input samples.
             Defaults to None, in which case loss is not computed.
-        device (torch.device, optional):
-            Device on which to perform inference.
-            Defaults to torch.device("cpu").
         criterion (nn.Module, optional):
             Instantiated loss function to use for backpropagation.
             Defaults to None, in which case loss is not computed.
@@ -215,7 +214,6 @@ def simulate_batch_size(
             dimension.
         device (torch.device, optional):
             Device for which to compute an optimum batch size.
-            Defaults to torch.device("cpu").
         target (torch.tensor, optional):
             Ground truth labels corresponding to the input samples. Should not
             include a batch dimension.
@@ -251,12 +249,12 @@ def simulate_batch_size(
         # stop if binary search active and no additional increase possible
         delta = (bs_h - bs_l) // 2
         if binary_search and delta <= 1:
-            return int(bs_l * scalar)
+            return max(1, int(bs_l * scalar))
 
         try:
             # forward pass w/o backpropagation and optimization
             _, _ = forward_pass(
-                model, sample=try_sample, target=try_target, device=device,
+                model, sample=try_sample, device=device, target=try_target,
                 criterion=criterion, optimizer=optimizer,
                 sample_dtype=sample.dtype,
                 target_dtype=target.dtype if target is not None else None)
@@ -279,27 +277,64 @@ def simulate_batch_size(
             torch.cuda.empty_cache()
 
 
-def _save_checkpoint(
+def save(
         file: Path,
-        model: nn.module,
+        model: nn.Module,
         **kwargs
 ):
     """
-    Save model parameters in a checkpoint.pth file.
+    Save model parameters as a series of checkpoint files.
 
     Args:
-        epoch (int):
-            Training epoch after which to save model parameters.
+        file (Path):
+            location in which to safe checkpoints.
+        model (nn.module):
+            Model to save in checkpoint file. Model parameters are saved using
+            secure .safetensors format.
+        **kwargs
+            Keyword arguments. Additional items (ex. optimizer state) are saved
+            in a tandem .pth file.
     """
-    saved = {} if not self.checkpoint_pth.is_file() else torch.load(
-        self.checkpoint_pth)
-    states = {
-        "model": self.model.state_dict(), "epoch": epoch,
-        "optimizer": (
-            self.optim.state_dict() if self.optim is not None else None),
-        "scheduler": (
-            self.sched.state_dict() if self.sched is not None
-            else None)}
-    saved[self.model_name] = {
-        k: v for k, v in states.items() if v is not None}
-    torch.save(saved, self.checkpoint_pth)
+    # save model parameters as safetensors format
+    save_file(model.state_dict(), file.with_suffix(".safetensors"))
+
+    # save auxiliary values
+    if len(kwargs) > 0:
+        file_pth = file.with_suffix(".pth")
+        saved = torch.load(file_pth) if file_pth.is_file() else {}
+        saved = saved.update(kwargs)
+        torch.save(saved, file_pth)
+
+
+def load(
+        file: Path,
+        model: nn.Module,
+        device: torch.device
+):
+    """
+    Load saved model from a series of checkpoint files.
+
+    Args:
+        file (Path):
+            location in which to safe checkpoints.
+        model (nn.module):
+            Model to save in checkpoint file. Model parameters are saved using
+            secure .safetensors format.
+        device (torch.device):
+            Device on which to load saved tensors.
+
+    Returns:
+        model (nn.Module):
+            Model with loaded parameters on specified device.
+        extras (dict):
+            Additional values stored in companion .pth, mapped to device.
+    """
+    # load model parameters from safetensors format
+    params = load_file(file.with_suffix(".safetensors"))
+    model.load_state_dict({k: v.to(device) for k, v in params.items()})
+
+    # load auxiliary values
+    file_pth = file.with_suffix(".pth")
+    extras = {} if not file_pth.is_file() else torch.load(
+        file_pth, map_location=device)
+    return model, extras
