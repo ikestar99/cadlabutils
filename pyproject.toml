@@ -3,7 +3,7 @@ name = "your_package"
 version = "0.1.0"
 description = "python utility functions for patch-seq data analysis"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = { text = "Apache" }
 
 authors = [
@@ -12,16 +12,24 @@ authors = [
 
 # Runtime dependencies (adjust as needed)
 dependencies = [
-  "numpy",
+  "numpy>=2.3.1",
+  "pandas>=2.2.3"
 ]
 
 [project.optional-dependencies]
-reg = [
+arr_utils = [
   "pystackreg>=0.2.8",
-  "scikit-learn"
 ]
 
-util2 = [
+ext_utils = [
+  "matplotlib",
+  "seaborn"
+]
+
+torch_utils = [
+  "torch~=2.7.1",
+  "safetensors~=0.5.3",
+  "scikit-learn~=1.6.1",
   "matplotlib",
   "seaborn"
 ]

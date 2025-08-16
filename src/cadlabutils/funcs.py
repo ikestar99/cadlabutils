@@ -5,28 +5,20 @@ Created on Wed Jan 22 09:00:00 2025
 @author: ike
 """
 
-
-import os
-import time
 import h5py as h5
 import numpy as np
 import pandas as pd
-import shutil
-import platform
 import tifffile as tf
 import hdf5plugin
-import tracemalloc as tm
 import scipy.stats as sst
-import rich.progress as rp
 import scipy.spatial as ssp
 import scipy.ndimage as scn
 import skimage.morphology as skm
 
 from pathlib import Path
-from datetime import datetime
 from scipy.spatial.distance import cdist
 
-from src.cadlabutils.unionfind import UnionFind
+from src.cadlabutils.misc_utils.unionfind import UnionFind
 
 
 def save_tif(
