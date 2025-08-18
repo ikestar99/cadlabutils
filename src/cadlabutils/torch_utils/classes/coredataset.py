@@ -44,7 +44,7 @@ class CoreDataset(Dataset):
             thalamus 4                3
                      6                1
     """
-    _INDEX = "_data_index"
+    _INDEX = "_index"
 
     def __init__(
             self,
@@ -59,7 +59,7 @@ class CoreDataset(Dataset):
                 Metadata associated with each sample in the dataset. The order
                 of keyword arguments dictates the hierarchical order of
                 metadata variables.
-                -   key (str):
+                -   key (An):
                         Name of metadata variable.
                 -   value (list | tuple):
                         Values of metadata variable across samples. Must have

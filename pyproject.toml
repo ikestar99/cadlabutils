@@ -20,11 +20,14 @@ dependencies = [
 [project.optional-dependencies]
 arr_utils = [
   "pystackreg~=0.2.8",
+  "scikit-image~=0.25.2"
 ]
 
 ext_utils = [
   "zarr~=2.18.3",
-  "numcodecs~=0.14.1"
+  "numcodecs~=0.14.1",
+  "h5py~=3.13.0",
+  "hdf5plugin~=5.1.0"
 ]
 
 torch_utils = [

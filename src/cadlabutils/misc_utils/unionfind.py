@@ -7,6 +7,9 @@ Created on Wed Jan 22 09:00:00 2025
 
 
 import numpy as np
+import scipy.spatial as ssp
+
+from scipy.spatial.distance import cdist
 
 
 class UnionFind:
@@ -120,3 +123,66 @@ class UnionFind:
             _ = self.find(i)
 
         return np.array(self._root), np.array(self._prev), np.array(self._rank)
+
+
+def find_neighbors(
+    coordinates: np.ndarray
+):
+    """
+    Apply cKDTree to identify indices of neighboring points. Neighboring nodes
+    are directly connected by faces, vertices, or edges -- approximately within
+    a radius equal to the magnitude of the vector <1, ..., coordinates.ndim>.
+
+    Args:
+        coordinates (np.ndarray):
+            Input array of point coordinates. Of shape (n_points, n_axes).
+
+    Returns:
+        (np.ndarray):
+            Array of lists with the same length as coordinates arg. Each index
+            contains a list of indices of all points connected to the current
+            point, inclusive of the queried point itself.
+    """
+    tree = ssp.cKDTree(coordinates)
+    neighbors = np.array(
+        tree.query_ball_tree(tree, r=coordinates.shape[-1] + 0.1), dtype=list)
+    return neighbors
+
+
+def find_components(
+        coordinates: np.ndarray,
+        center: np.ndarray
+):
+    """
+    Identify connected components from array of node coordinates and assign
+    parent/child relationships between adjacent nodes. Will call find_neighbors
+    to identify indices of neighboring points. Root node of each connected
+    component is node closest to center point.
+
+    Args:
+        coordinates (np.ndarray):
+            Input array of point coordinates. Of shape (n_points, n_axes).
+        center (np.ndarray):
+            Reference point. Of shape (n_axes,).
+
+    Returns:
+        (tuple):
+            Contains 4 items, all 1d arrays of same length as number of nodes:
+            -   0 (np.ndarray):
+                    Label of connected component to which each node belongs.
+            -   1 (np.ndarray):
+                    Parent node index of each node.
+            -   2 (np.ndarray):
+                    Number of child nodes connected to each root node.
+            -   3 (np.ndarray):
+                    Euclidean distance of each node from center point.
+    """
+    uf = UnionFind(coordinates.shape[0])
+    neighbors = find_neighbors(coordinates)
+    distances = cdist(center[None], coordinates).flatten()
+    for x in np.argsort(distances):
+        for n in neighbors[x]:
+            if n != x:
+                uf.union(x, n)
+
+    return *uf.update(), distances
