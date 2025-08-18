@@ -1,6 +1,8 @@
 <div align="center">
-
-  <img src="assets/logo.png" alt="logo" width="200" height="auto" />
+  <p align="center">
+    <img src="assets/logo-night.png#gh-light-mode-only" alt="logo-light" width="200" height="auto" />
+    <img src="assets/logo-night.png#gh-dark-mode-only" alt="logo-dark" width="200" height="auto" />
+  </p>
   <h1>cadlabutils</h1>
   
   <p>
