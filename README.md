@@ -1,9 +1,8 @@
 <div align="center">
   <p align="center">
-    <img src="assets/logo-day.png#gh-light-mode-only" alt="logo-day" width="200" height="auto" />
-    <img src="assets/logo-night.png#gh-dark-mode-only" alt="logo-night" width="200" height="auto" />
+    <img src="assets/logo-day.png#gh-light-mode-only" alt="logo-day" width="600" height="auto" />
+    <img src="assets/logo-night.png#gh-dark-mode-only" alt="logo-night" width="600" height="auto" />
   </p>
-  <h1>cadlabutils</h1>
   
   <p>
     Python utilities for data analysis pipelines across the Cadwell Lab at UCSF 
