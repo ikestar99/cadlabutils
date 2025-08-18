@@ -12,26 +12,25 @@ authors = [
 
 # Runtime dependencies (adjust as needed)
 dependencies = [
-  "numpy>=2.3.1",
-  "pandas>=2.2.3"
+  "numpy~=2.3.1",
+  "pandas~=2.2.3",
+  "matplotlib~=3.10.0",
 ]
 
 [project.optional-dependencies]
 arr_utils = [
-  "pystackreg>=0.2.8",
+  "pystackreg~=0.2.8",
 ]
 
 ext_utils = [
-  "matplotlib",
-  "seaborn"
+  "zarr~=2.18.3",
+  "numcodecs~=0.14.1"
 ]
 
 torch_utils = [
   "torch~=2.7.1",
   "safetensors~=0.5.3",
   "scikit-learn~=1.6.1",
-  "matplotlib",
-  "seaborn"
 ]
 
 dev = [

@@ -8,21 +8,9 @@
 
 import numpy as np
 import pandas as pd
-import operator
 
-from torch.utils.data import Dataset, Subset, ConcatDataset
-
+from torch.utils.data import Dataset, Subset
 from sklearn.model_selection import StratifiedKFold
-
-
-OPERATIONS = {
-    "<": operator.lt,
-    ">": operator.gt,
-    "<=": operator.le,
-    ">=": operator.ge,
-    "==": operator.eq,
-    "!=": operator.ne
-}
 
 
 class CoreDataset(Dataset):
@@ -40,146 +28,21 @@ class CoreDataset(Dataset):
         meta (pd.DataFrame):
             Hierarchically indexed DataFrame storing metadata.
 
-    Examples:
+    Example:
     ---------------------------------------------------------------------------
         Instantiate with 1d datum.
-        >>> # test_data shape = (3 data points, 5 observations per datum)
-        >>> test_data = np.arange(15).reshape(3, 5)
-        >>> # test_meta shape = (3 data points, 2 metadata variables)
-        >>> test_meta = pd.DataFrame(
-        ... {"day": "Mon", "label": [1, 1, 2]})
-        >>> # test_axes = number of axes in each datum, 1 if datum is 1d array
-        >>> test_axes = 1
-        >>> test_dataset = CoreDataset(test_data, test_meta, test_axes)
-        >>> test_dataset.data
-        array([[ 0,  1,  2,  3,  4],
-               [ 5,  6,  7,  8,  9],
-               [10, 11, 12, 13, 14]])
-        >>> test_dataset.meta
-                                   _data_index
-        day label _repeated_trial
-        Mon 1     0                          0
-                  1                          1
-            2     2                          2
-
-        -----------------------------------------------------------------------
-        Instantiate using "expand" arg.
-        Note that an internal _repeated trial" metadata level distinguishes
-        between repetitions of the same set of metadata values.
-        >>> # test_data shape = (3 * 2 data points, 5 observations per datum)
-        >>> test_data = np.arange(30).reshape(3, 2, 5)
-        >>> test_expand = [(1, "channel", ["blue", "red"])]
-        >>> test_dataset = CoreDataset(
-        ... test_data, test_meta, test_axes, test_expand)
-        >>> test_dataset.data
-        array([[ 0,  1,  2,  3,  4],
-               [ 5,  6,  7,  8,  9],
-               [10, 11, 12, 13, 14],
-               [15, 16, 17, 18, 19],
-               [20, 21, 22, 23, 24],
-               [25, 26, 27, 28, 29]])
-        >>> test_dataset.meta
-                                           _data_index
-        day label _repeated_trial channel
-        Mon 1     0               blue               0
-                                  red                1
-                  1               blue               2
-                                  red                3
-            2     2               blue               4
-                                  red                5
-
-        -----------------------------------------------------------------------
-        Filter instance using __getitem__.
-        >>> test_slice = test_dataset[1:6:2]
-        >>> test_slice.data
-        array([[ 5,  6,  7,  8,  9],
-               [15, 16, 17, 18, 19],
-               [25, 26, 27, 28, 29]])
-        >>> test_slice.meta
-                                           _data_index
-        day label _repeated_trial channel
-        Mon 1     0               red                0
-                  1               red                1
-            2     2               red                2
-        >>> test_slice = test_dataset[{"label": {">": 0}, "channel": ["blue"]}]
-        >>> test_slice.data
-        array([[ 0,  1,  2,  3,  4],
-               [10, 11, 12, 13, 14],
-               [20, 21, 22, 23, 24]])
-        >>> test_slice.meta
-                                           _data_index
-        day label _repeated_trial channel
-        Mon 1     0               blue               0
-                  1               blue               1
-            2     2               blue               2
-
-        -----------------------------------------------------------------------
-        Add two instances together.
-        Note that "label" and "channel" metadata levels are dropped after
-        addition since they aren't shared across operands.
-        >>> test_data = np.arange(10).reshape(2, 5)
-        >>> test_meta_1 = pd.DataFrame({"day": "Mon", "label": [1, 2]})
-        >>> test_meta_2 = pd.DataFrame({"day": "Tue", "channel": [5, 6]})
-        >>> test_axes = 1
-        >>> test_dataset_1 = CoreDataset(test_data, test_meta_1, test_axes)
-        >>> test_dataset_2 = CoreDataset(-test_data, test_meta_2, test_axes)
-        >>> test_add = test_dataset_1 + test_dataset_2
-        >>> test_add.data
-        array([[ 0,  1,  2,  3,  4],
-               [ 5,  6,  7,  8,  9],
-               [ 0, -1, -2, -3, -4],
-               [-5, -6, -7, -8, -9]])
-        >>> test_add.meta
-                             _data_index
-        _repeated_trial day
-        0               Mon            0
-        1               Mon            1
-        2               Tue            2
-        3               Tue            3
-
-        -----------------------------------------------------------------------
-        Extract scalar summary statistic from each datum.
-        >>> test_dataset.data
-        array([[ 0,  1,  2,  3,  4],
-               [ 5,  6,  7,  8,  9],
-               [10, 11, 12, 13, 14],
-               [15, 16, 17, 18, 19],
-               [20, 21, 22, 23, 24],
-               [25, 26, 27, 28, 29]])
-        >>> test_dataset.extract_statistic(np.mean, "mean")
-                                           _data_index  mean
-        day label _repeated_trial channel
-        Mon 1     0               blue               0   2.0
-                                  red                1   7.0
-                  1               blue               2  12.0
-                                  red                3  17.0
-            2     2               blue               4  22.0
-                                  red                5  27.0
-
-        -----------------------------------------------------------------------
-        Apply function across channels
-        >>> test_agg = test_dataset.apply_function(
-        ... np.mean, ["label"], axis=0)
-        >>> test_agg.data
-        array([[10., 11., 12., 13., 14.],
-               [15., 16., 17., 18., 19.]])
-        >>> test_agg.meta
-                                     _data index
-        day channel _repeated trial
-        Mon blue    0                          0
-            red     1                          1
-        >>> test_agg = test_dataset.apply_function(
-        ... np.median, ["label", "channel"], axis=0)
-        >>> test_agg.data
-        array([[ 2.5,  3.5,  4.5,  5.5,  6.5],
-               [12.5, 13.5, 14.5, 15.5, 16.5],
-               [22.5, 23.5, 24.5, 25.5, 26.5]])
-        >>> test_agg.meta
-                             _data index
-        day _repeated trial
-        Mon 0                          0
-            1                          1
-            2                          2
+        >>> # arbitrary dataset with 4 samples
+        >>> length = 4
+        >>> # arbitrary metadata values, including constants and lists
+        >>> day, label, count = "Mon", ["cortex", "thalamus"], [3, 6, 1, 4]
+        >>> dataset = CoreDataset(length, day=day, label=label, count=count)
+        >>> dataset.meta  # doctest: +NORMALIZE_WHITESPACE
+                            _data_index
+        day label    count
+        Mon cortex   1                2
+                     3                0
+            thalamus 4                3
+                     6                1
     """
     _INDEX = "_data_index"
 
@@ -207,7 +70,7 @@ class CoreDataset(Dataset):
         """
         super(CoreDataset, self).__init__()
 
-        meta = pd.DataFrame(np.arange(n_samples)[..., None])
+        meta = pd.DataFrame(np.arange(n_samples), columns=[self._INDEX])
 
         # add metadata columns
         for k, v in kwargs.items():
@@ -226,7 +89,7 @@ class CoreDataset(Dataset):
         # create hierarchical index and set instance attributes
         cols = [c for c in meta.columns if c != self._INDEX]
         self.meta = meta if len(cols) == 0 else meta.set_index(
-            cols, append=False)
+            cols, append=False).sort_index()
 
     def __len__(
             self
@@ -255,7 +118,7 @@ class CoreDataset(Dataset):
         """
         return self.meta.index.get_level_values(meta_var).to_numpy()
 
-    def filter_idx(
+    def filter(
             self,
             pattern: dict[str: list]
     ):
@@ -276,13 +139,14 @@ class CoreDataset(Dataset):
             (np.ndarray):
                 Indices of samples matching the specified pattern.
         """
-        sub_meta = self.meta.copy()
+        mask = None
         for k, v in pattern.items():
-            sub_meta = sub_meta[sub_meta.index.isin(np.atleast_1d(v), level=k)]
+            pos = self.meta.index.isin(np.atleast_1d(v), level=k)
+            mask = pos if mask is None else (mask & pos)
 
-        return sub_meta[self._INDEX].to_numpy()
+        return self.meta.loc[mask, self._INDEX].to_numpy()
 
-    def kfold_split_idx(
+    def k_fold(
             self,
             n_folds: int,
             meta_vars: list[str] = None,
@@ -334,7 +198,7 @@ class CoreDataset(Dataset):
         _, counts = np.unique(stratify, return_counts=True)
         if n_folds < 2 or n_folds < np.min(counts):
             raise ValueError(
-                f"{self.__class__.__name__}.kfold_split_idx expects at least "
+                f"{self.__class__.__name__}.k_fold expects at least "
                 + f"2 valid folds, got n_folds={n_folds} and a distribution "
                 + f"of within-strata tallies of {counts}")
 
