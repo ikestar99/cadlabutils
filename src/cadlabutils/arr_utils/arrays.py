@@ -8,54 +8,122 @@ Created on Tue July 4 13:06:21 2023
 
 import numpy as np
 import pandas as pd
+import scipy.stats as sst
 import scipy.ndimage as scn
+import skimage.morphology as skm
 
 
-"""
-Helper functions for modifying imaging data hyperstacks using binary masks.
-"""
-
-
-def safe_concat(
-        arr_1: np.ndarray,
-        arr_2: np.ndarray = None,
-        axis: int = 0
+def label_array(
+        arr: np.ndarray,
+        connect: int = None
 ):
     """
-    Concatenate two arrays along a specified axis if neither is None. Used to
-    abstract the following code:
-    arr = concatenate((arr_2, arr_1), axis) if arr_2 is not None else arr_1
+    Label connected components in an array.
 
     Args:
-        arr_1 (np.ndarray):
-            First array to concatenate.
-        arr_2 (np.ndarray, optional):
-            Second array to concatenate.
-            Defaults to None, in which case output is arr_1.
-        axis (int, optional):
-            Axis along which to concatenate.
-            Defaults to 0.
+    ---------------------------------------------------------------------------
+        arr (np.ndarray):
+            Array to label.
+        connect (int, optional):
+            Determine which array indices to connect as neighbors. 1 <= connect
+            <= arr.ndim.
+            Defaults to None, in which case connect = array.ndim.
 
     Returns:
-        (np.ndarray):
-            Concatenated array.
-    """
-    if arr_2 is not None:
-        return np.concatenate((arr_2, arr_1), axis=axis)
+    ---------------------------------------------------------------------------
+        array (np.ndarray):
+            Input array with connected components labeled (int).
+        mode (int):
+            Label of largest connected component.
+        count (int):
+            Size of largest connected component.
 
-    return arr_1
+    Examples:
+    ---------------------------------------------------------------------------
+        Label an array with 2 objects connected by faces and vertices
+        >>> array = np.array([
+        ...     [0, 1, 0, 4, 0, 0, 0, 1, 0, 0],
+        ...     [8, 7, 0, 0, 9, 0, 0, 2, 2, 0],
+        ...     [0, 0, 0, 0, 9, 8, 8, 0, 0, 0]])
+        >>> labeled, mode, count = label_array(array)
+        >>> labeled
+        array([[0, 1, 0, 2, 0, 0, 0, 2, 0, 0],
+               [1, 1, 0, 0, 2, 0, 0, 2, 2, 0],
+               [0, 0, 0, 0, 2, 2, 2, 0, 0, 0]], dtype=int32)
+        >>> mode
+        np.int32(2)
+        >>> count
+        np.int64(8)
+
+        Label an array with 4 objects connected by faces alone
+        >>> labeled, _, _ = label_array(array, connect=1)
+        >>> labeled
+        array([[0, 1, 0, 2, 0, 0, 0, 3, 0, 0],
+               [1, 1, 0, 0, 4, 0, 0, 3, 3, 0],
+               [0, 0, 0, 0, 4, 4, 4, 0, 0, 0]], dtype=int32)
+    """
+    connect = min(arr.ndim, arr.ndim if connect is None else connect)
+    arr, _ = scn.label(
+        arr, structure=scn.generate_binary_structure(arr.ndim, connect))
+    mode, count = sst.mode(np.ma.masked_equal(arr, 0), axis=None)
+    return arr, mode, count
+
+
+def remove_blobs(
+        arr: np.ndarray,
+        min_size: int,
+        connect: int = None
+):
+    """
+    Remove foreground objects smaller than threshold size.
+
+    Args:
+    ---------------------------------------------------------------------------
+        arr (np.ndarray):
+            Array to apply volume threshold.
+        min_size (int):
+            Minimum volume of foreground object in pixels.
+        connect (int, optional):
+            Determine which array indices to connect as neighbors. Passed to
+            label_array function call.
+
+    Returns:
+    ---------------------------------------------------------------------------
+        (np.ndarray):
+            Array with foreground objects removed (bool).
+
+    Examples:
+    ---------------------------------------------------------------------------
+        Remove objects with fewer than 5 indices
+        >>> array = np.array([
+        ...     [0, 1, 0, 4, 0, 0, 0, 1, 0, 0],
+        ...     [8, 7, 0, 0, 9, 0, 0, 2, 2, 0],
+        ...     [0, 0, 0, 0, 9, 8, 8, 0, 0, 0]])
+        >>> mask = remove_blobs(array, min_size=5)
+        >>> mask * array
+        array([[0, 0, 0, 1, 0, 0, 0, 1, 0, 0],
+               [0, 0, 0, 0, 1, 0, 0, 1, 1, 0],
+               [0, 0, 0, 0, 1, 1, 1, 0, 0, 0]])
+    """
+    connect = arr.ndim if connect is None else min(connect, arr.ndim)
+    arr, _, _ = label_array(arr, connect)
+    arr = arr if np.unique(arr).size <= 2 else skm.remove_small_objects(
+        arr, min_size, connect)
+    return arr != 0
 
 
 def min_max_scaling(
-        array: np.ndarray,
-        new_min: float = 0,
-        new_max: float = 1,
+        arr: np.ndarray,
+        new_min: float = 0.0,
+        new_max: float = 1.0,
+        dtype: np.dtype = None,
 ):
     """
     Rescale array to set minimum and maximum values.
 
     Args:
-        array (np.ndarray):
+    ---------------------------------------------------------------------------
+        arr (np.ndarray):
             Array to scale.
         new_min (float, optional):
             Minimum value in scaled array.
@@ -63,185 +131,93 @@ def min_max_scaling(
         new_max (float, optional):
             Maximum value in scaled array.
             Defaults to 1.
+        dtype (np.dtype, optional):
+            Data type of the scaled array.
+            Defaults to None, in which case return type is np.float64.
 
     Returns:
-        (tuple):
-            Contains the following three items:
-            -   0 (np.ndarray):
-                Array values scaled between new_min and new_max.
-            -   1 (float):
-                Minimum value in input array.
-            -   2 (float):
-                Maximum value in input array.
-    """
-    min_value, max_value = np.min(array), np.max(array)
-    array = (array - min_value) / (max_value - min_value)
-    array = (array * (new_max - new_min)) + new_min
-    return array, min_value, max_value
-
-
-def _mask_zeros(
-        mask: np.ndarray
-):
-    """
-    Masks all zero values of an input array using np.ma module.
-
-    Args:
-        mask (np.ndarray): Input array.
-
-    Returns:
-        Masked array (np.ma.masked_array).
-
-    Raises:
-        ValueError: Mask is empty.
+    ---------------------------------------------------------------------------
+        arr (np.ndarray):
+            Array values scaled between new_min and new_max.
+        old_min (float):
+            Minimum value in input array.
+        old_max (float):
+            Maximum value in input array.
 
     Examples:
-        >>> test_mask = np.array([0, 1, 2, 0, 3])
-        >>> test_mask = _mask_zeros(test_mask)
-        >>> test_mask
-        masked_array(data=[--, 1, 1, --, 1],
-                     mask=[ True, False, False,  True, False],
-                     fill_value=999999)
-
-    Error Examples:
-        >>> invalid_mask = np.array([0, 0, 0, 0, 0])
-        >>> _mask_zeros(invalid_mask)
-        Traceback (most recent call last):
-            ...
-        ValueError: Mask is empty.
+    ---------------------------------------------------------------------------
+        Rescale integer array to [0, 4] interval
+        >>> array = np.array([
+        ...     [0, 1, 0, 4, 0],
+        ...     [8, 7, 0, 0, 6],
+        ...     [0, 0, 0, 0, 4]], dtype=int)
+        >>> array, old_min, old_max = min_max_scaling(
+        ...     array, new_min=0, new_max=4)
+        >>> array
+        array([[0. , 0.5, 0. , 2. , 0. ],
+               [4. , 3.5, 0. , 0. , 3. ],
+               [0. , 0. , 0. , 0. , 2. ]])
+        >>> old_min
+        np.int64(0)
+        >>> old_max
+        np.int64(8)
     """
-    mask = (mask > 0).astype(int)
-    if np.sum(mask) <= 0:
-        raise ValueError("Mask is empty.")
-
-    mask = np.ma.masked_where(mask == 0, mask)
-    return mask
-
-
-def label_mask(
-        mask: np.ndarray
-):
-    """
-    Labels contiguous regions in a ND mask array and returns an ND + 1 array
-    where the first dimension corresponds to the number of regions found, and
-    each index along this dimension is a binary integer mask for that region
-    with the same shape as the input mask.
-
-    Note:
-        label_mask is intended for use with 2D masks corresponding to ground
-        truth images, but is written to work with arrays of varying
-        dimensionality.
-
-    Args:
-        mask (np.ndarray): Integer mask array on which to perform labeling.
-
-    Returns:
-        Labeled mask array.
-
-    Example:
-        >>> test_mask = np.array([[1, 1, 0], [0, 0, 1]])
-        >>> test_array = label_mask(test_mask)
-        >>> test_array
-        array([[[1, 1, 0],
-                [0, 0, 0]],
-        <BLANKLINE>
-               [[0, 0, 0],
-                [0, 0, 1]]])
-    """
-    labeled_mask, regions = scn.label(mask)
-    labeled_mask = np.array([labeled_mask == i for i in range(1, regions + 1)])
-    labeled_mask = labeled_mask.astype(int)
-    return labeled_mask
+    old_min, old_max = np.min(arr), np.max(arr)
+    arr = (arr - old_min) / (old_max - old_min)
+    arr = (arr * (new_max - new_min)) + new_min
+    arr = arr if dtype is None else arr.astype(dtype)
+    return arr, old_min, old_max
 
 
 def aggregate_region(
-        hyperstack: np.ndarray,
+        arr: np.ndarray,
         mask: np.ndarray,
-        func: np.ufunc = np.nanmean
+        func: np.ufunc = np.mean
 ):
     """
-    Measures average value in a region specified by the mask. The hyperstack is
-    a 5D array, and the mask is a 2D array of integers where all nonzero
-    entries define a region of interest. The func parameter is the numpy
-    function that should be used to aggregate values within a region.
+    Computes some statistic from a region specified by the mask.
 
     Args:
-        hyperstack (np.ndarray): 5D array of images on which to perform
-            region of interest aggregation
-        mask (np.ndarray): 2D mask of the region within the image from which to
-            compute an aggregate. Must have the same shape as the last two
-            dimensions of the hyperstack.
-        func (np.ufunc): Numpy function to aggregate values within a region.
-            Must be a nan-type function to ignore non regions of interest in
-            mask. Defaults to np.nanmean.
+    ---------------------------------------------------------------------------
+        arr (np.ndarray):
+            Array on which to compute statistic within a region.
+        mask (np.ndarray):
+            Boolean or binary array identifying region of interest within arr.
+            Must either have the same shape as arr, or a shape compatible with
+            the trailing dimensions of arr.
+        func (np.ufunc, optional):
+            Numpy-compatible function used to aggregate values within a region.
+            Defaults to np.mean.
 
     Returns:
-        Float array with the same shape as the first 3 dimensions on the input
-            hyperstack wherein array[t, z, c] corresponds to the func aggregate
-            of all values within the region of interest in the image
-            hyperstack[t, z, c, :, :].
-
-    Raises:
-        ValueError: If the hyperstack and mask shapes do not match.
-
-    Error Examples:
-        >>> test_hyperstack = np.random.rand(2, 2, 2, 3, 2)
-        >>> test_mask = np.array([[1, 0], [0, 1]])
-        >>> aggregate_region(test_hyperstack, test_mask)
-        Traceback (most recent call last):
-            ...
-        ValueError: Hyperstack and mask shapes do not match.
-    """
-    if hyperstack.shape[-2:] != mask.shape:
-        raise ValueError("Hyperstack and mask shapes do not match.")
-
-    mask = _mask_zeros(mask)
-    hyperstack = hyperstack * mask
-    hyperstack = func(hyperstack, axis=(-2, -1))
-    hyperstack = np.array(hyperstack)
-    return hyperstack
-
-
-def subtract_background(
-        hyperstack: np.ndarray,
-        mask: np.ndarray,
-        func: np.ufunc = np.nanmean
-):
-    """
-    For each 2D image in the 5D input hyperstack, subtract the baseline value
-    computed using a statistical method specified by the parameter func in the
-    background region specified by the mask.
-
-    Args:
-        hyperstack (np.ndarray): 5D array of images on which to perform
-            background correction.
-        mask (np.ndarray): 2D mask of the region within the image from which to
-            compute the background.
-        func (np.ufunc): Numpy function to aggregate values within background.
-            Must be a nan-type function to ignore non regions of interest in
-            mask. Defaults to np.nanmean.
-
-    Returns:
-        Array of the same shape as the input array with the average background
-        pixel intensity of each 2D image subtracted from all other pixels
-        within each image.
+    ---------------------------------------------------------------------------
+        (float | np.ndarray):
+            Statistic from arr indices within masked region.
+            Shape corresponds to leading dimensions of arr beyond those
+            included in mask (shape = arr.shape[:mask.ndim]). If arr and mask
+            have the same shape, return value is float.
 
     Examples:
-        >>> test_hyperstack = np.random.rand(2, 1, 1, 2, 2)
-        >>> test_mask = np.array([[1, 0], [0, 1]])
-        >>> subtract_background(test_hyperstack, test_mask) # random
-        array([[[[[-0.25986144, -0.01362817],
-                  [-0.16114681,  0.25986144]]]],
-        <BLANKLINE>
-        <BLANKLINE>
-        <BLANKLINE>
-               [[[[ 0.3862333 , -0.47352969],
-                  [-0.47722033, -0.3862333 ]]]]])
+    ---------------------------------------------------------------------------
+        arr.ndim > mask.ndim
+        >>> array = np.arange(30).reshape(3, 10)
+        >>> array
+        array([[ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9],
+               [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+               [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]])
+        >>> mask = np.arange(10) >= 5
+        >>> aggregate_region(array, mask)
+        array([ 7., 17., 27.])
+
+        arr.ndim = mask.ndim
+        >>> aggregate_region(array[0], mask)
+        7.0
     """
-    background = aggregate_region(hyperstack, mask, func)
-    background = background[..., np.newaxis, np.newaxis]
-    hyperstack = hyperstack - background
-    return hyperstack
+    arr = arr[..., mask]
+    shape = arr.shape[:-1]
+    arr = func(arr.reshape(-1, arr.shape[-1]), axis=-1)
+    arr = arr.reshape(shape) if arr.size > 1 else arr.item()
+    return arr
 
 
 def project_arr(
@@ -250,117 +226,137 @@ def project_arr(
         step: int = 50
 ):
     """
-    Generate projections along all axes of a z-stack stored in zarr format.
+    Generate projections along all axes of an array. Useful for array-like
+    objects (h5py.dataset, zarr.Array, etc.) too large to fit in memory.
 
     Args:
+    ---------------------------------------------------------------------------
         arr (np.ndarray):
-            Array to project.
-        func (np.ufunc, optional):
+            Array-like object to project.
+        func (np.ufunc):
             numpy function with which to project along each axis.
-            Defaults to np.min.
         step (int, optional):
-            Number of z-planes to process at a time. Defaults to 50.
+            Number of indices along the first dimension to process at a time.
+            Defaults to 50.
 
     Returns:
+    ---------------------------------------------------------------------------
         proj (list[np.ndarray]):
-            Contains the following structure:
-            -   key (str):
-                    Projection axis. "z", "y", "x".
-            -   value (np.ndarray):
-                    Projection array.
+            Projection array along each axis of arr.
+
+    Examples:
+    ---------------------------------------------------------------------------
+        Min intensity projection
+        >>> array = np.arange(30).reshape(3, 10)
+        >>> array
+        array([[ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9],
+               [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+               [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]])
+        >>> proj_0, proj_1 = project_arr(array, func=np.mean)
+        >>> proj_0
+        array([10., 11., 12., 13., 14., 15., 16., 17., 18., 19.])
+        >>> proj_1
+        array([ 4.5, 14.5, 24.5])
     """
+    # if True, compute initial projection via slice-wise comparison
+    slice_by_slice = func in (np.min, np.max)
+
     # project slices along z, y, and x dimensions
     proj = [
         np.zeros([d for j, d in enumerate(arr.shape) if j != i])
         for i in range(len(arr.shape))]
-    for zdx in range(0, arr.shape[0], step):
-        end = min(zdx + step, arr.shape[0])
-        sub = arr[zdx:end]
+
+    # chunk along first dimension
+    for idx in range(0, arr.shape[0], step):
+        end = min(idx + step, arr.shape[0])
+        sub = arr[idx:end]
 
         # compute projections on subset
-        val = func(sub, axis=0)
-        proj[0] = val if zdx == 0 else func(
-            np.stack([proj[0], val], axis=0), axis=0)
         for dim in range(1, len(arr.shape)):
-            proj[dim][zdx:end] = func(sub, axis=dim)
+            proj[dim][idx:end] = func(sub, axis=dim)
 
-    if func not in (np.min, np.max):
-        val = [
+        if slice_by_slice:
+            val = func(sub, axis=0)
+            proj[0] = val if idx == 0 else func(
+                np.stack([proj[0], val], axis=0), axis=0)
+
+    # update first projection if slice-by-slice comparison invalid
+    if not slice_by_slice:
+        proj[0] = np.concatenate([
             func(arr[:, ydx: min(ydx + step, arr.shape[1])], axis=0)
-            for ydx in range(0, arr.shape[1], step)]
-        proj[0] = np.concatenate(val, axis=0)
+            for ydx in range(0, arr.shape[1], step)], axis=0)
 
     # return projections
     return proj
 
 
-def dense_to_sparse(
-        dense: np.ndarray,
-        axes: list,
-        value: str,
-        offset: list=None
-):
-    """
-    Convert dense array into sparse DataFrame. Each nonzero element in array
-    becomes a unique row in DataFrame. DataFrame has a column for each axis in
-    array and an additional column for the value of each nonzero element.
-
-    Args:
-        dense (np.ndarray):
-            Dense array to convert to sparse format.
-        axes (list):
-            String labels of coordinate columns in sparse DataFrame. Must have
-            index for each axis in dense array.
-        value (str):
-            Label of element value column in sparse DataFrame.
-        offset (list, optional):
-            Additive offset to coordinate values in sparse DataFrame. Must have
-            integer value for each axis in dense array.
-            Defaults to None, in which case no offset is added.
-
-    Returns:
-        (pd.DataFrame):
-            Sparse DataFrame. Has columns = axes + [value]
-    """
-    sparse = np.nonzero(dense)
-    sparse = np.stack(list(sparse) + [dense[sparse]], axis=-1)
-    sparse[..., :-1] += 0 if offset is None else np.array(offset)[np.newaxis]
-    return pd.DataFrame(sparse, columns=axes + [value])
-
-
-def sparse_to_dense(
-        sparse: pd.DataFrame,
-        axes: list,
-        value: str,
-        dtype: type = np.uint8,
-        dims: np.ndarray = None
-):
-    """
-    Convert sparse DataFrame into dense format. Dense array has an axis for
-    each specified column in DataFrame with value populated by according to
-    specified column. Background values set to 0.
-
-    Args:
-        sparse (pd.DataFrame):
-            Sparse DataFrame to convert to dense format.
-        axes (list):
-            String labels of coordinate columns in sparse DataFrame. Must have
-            index for each axis in dense array.
-        value (str):
-            Label of element value column in sparse DataFrame.
-        dtype (type, optional):
-            Data type of dense array.
-            Defaults to np.uint8.
-        dims (list, optional):
-            Shape of dense array.
-            Defaults to None, in which case shape inferred from coordinates.
-
-    Returns:
-        (np.ndarray):
-            Dense array.
-    """
-    sparse = sparse[axes + [value]].to_numpy().T
-    dims = np.max(sparse[:-1], axis=-1) if dims is None else dims
-    dense = np.zeros(dims.astype(int) + 1, dtype=dtype)
-    dense[tuple(sparse[:-1].astype(int))] = sparse[-1]
-    return dense
+# def dense_to_sparse(
+#         dense: np.ndarray,
+#         axes: list,
+#         value: str,
+#         offset: list=None
+# ):
+#     """
+#     Convert dense array into sparse DataFrame. Each nonzero element in array
+#     becomes a unique row in DataFrame. DataFrame has a column for each axis in
+#     array and an additional column for the value of each nonzero element.
+#
+#     Args:
+#         dense (np.ndarray):
+#             Dense array to convert to sparse format.
+#         axes (list):
+#             String labels of coordinate columns in sparse DataFrame. Must have
+#             index for each axis in dense array.
+#         value (str):
+#             Label of element value column in sparse DataFrame.
+#         offset (list, optional):
+#             Additive offset to coordinate values in sparse DataFrame. Must have
+#             integer value for each axis in dense array.
+#             Defaults to None, in which case no offset is added.
+#
+#     Returns:
+#         (pd.DataFrame):
+#             Sparse DataFrame. Has columns = axes + [value]
+#     """
+#     sparse = np.nonzero(dense)
+#     sparse = np.stack(list(sparse) + [dense[sparse]], axis=-1)
+#     sparse[..., :-1] += 0 if offset is None else np.array(offset)[np.newaxis]
+#     return pd.DataFrame(sparse, columns=axes + [value])
+#
+#
+# def sparse_to_dense(
+#         sparse: pd.DataFrame,
+#         axes: list,
+#         value: str,
+#         dtype: type = np.uint8,
+#         dims: np.ndarray = None
+# ):
+#     """
+#     Convert sparse DataFrame into dense format. Dense array has an axis for
+#     each specified column in DataFrame with value populated by according to
+#     specified column. Background values set to 0.
+#
+#     Args:
+#         sparse (pd.DataFrame):
+#             Sparse DataFrame to convert to dense format.
+#         axes (list):
+#             String labels of coordinate columns in sparse DataFrame. Must have
+#             index for each axis in dense array.
+#         value (str):
+#             Label of element value column in sparse DataFrame.
+#         dtype (type, optional):
+#             Data type of dense array.
+#             Defaults to np.uint8.
+#         dims (list, optional):
+#             Shape of dense array.
+#             Defaults to None, in which case shape inferred from coordinates.
+#
+#     Returns:
+#         (np.ndarray):
+#             Dense array.
+#     """
+#     sparse = sparse[axes + [value]].to_numpy().T
+#     dims = np.max(sparse[:-1], axis=-1) if dims is None else dims
+#     dense = np.zeros(dims.astype(int) + 1, dtype=dtype)
+#     dense[tuple(sparse[:-1].astype(int))] = sparse[-1]
+#     return dense
