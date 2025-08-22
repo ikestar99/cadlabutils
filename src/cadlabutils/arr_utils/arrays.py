@@ -7,7 +7,6 @@ Created on Tue July 4 13:06:21 2023
 
 
 import numpy as np
-import pandas as pd
 import scipy.stats as sst
 import scipy.ndimage as scn
 import skimage.morphology as skm
@@ -101,9 +100,9 @@ def remove_blobs(
         ...     [0, 0, 0, 0, 9, 8, 8, 0, 0, 0]])
         >>> mask = remove_blobs(array, min_size=5)
         >>> mask * array
-        array([[0, 0, 0, 1, 0, 0, 0, 1, 0, 0],
-               [0, 0, 0, 0, 1, 0, 0, 1, 1, 0],
-               [0, 0, 0, 0, 1, 1, 1, 0, 0, 0]])
+        array([[0, 0, 0, 4, 0, 0, 0, 1, 0, 0],
+               [0, 0, 0, 0, 9, 0, 0, 2, 2, 0],
+               [0, 0, 0, 0, 9, 8, 8, 0, 0, 0]])
     """
     connect = arr.ndim if connect is None else min(connect, arr.ndim)
     arr, _, _ = label_array(arr, connect)
@@ -290,73 +289,89 @@ def project_arr(
     return proj
 
 
-# def dense_to_sparse(
-#         dense: np.ndarray,
-#         axes: list,
-#         value: str,
-#         offset: list=None
-# ):
-#     """
-#     Convert dense array into sparse DataFrame. Each nonzero element in array
-#     becomes a unique row in DataFrame. DataFrame has a column for each axis in
-#     array and an additional column for the value of each nonzero element.
-#
-#     Args:
-#         dense (np.ndarray):
-#             Dense array to convert to sparse format.
-#         axes (list):
-#             String labels of coordinate columns in sparse DataFrame. Must have
-#             index for each axis in dense array.
-#         value (str):
-#             Label of element value column in sparse DataFrame.
-#         offset (list, optional):
-#             Additive offset to coordinate values in sparse DataFrame. Must have
-#             integer value for each axis in dense array.
-#             Defaults to None, in which case no offset is added.
-#
-#     Returns:
-#         (pd.DataFrame):
-#             Sparse DataFrame. Has columns = axes + [value]
-#     """
-#     sparse = np.nonzero(dense)
-#     sparse = np.stack(list(sparse) + [dense[sparse]], axis=-1)
-#     sparse[..., :-1] += 0 if offset is None else np.array(offset)[np.newaxis]
-#     return pd.DataFrame(sparse, columns=axes + [value])
-#
-#
-# def sparse_to_dense(
-#         sparse: pd.DataFrame,
-#         axes: list,
-#         value: str,
-#         dtype: type = np.uint8,
-#         dims: np.ndarray = None
-# ):
-#     """
-#     Convert sparse DataFrame into dense format. Dense array has an axis for
-#     each specified column in DataFrame with value populated by according to
-#     specified column. Background values set to 0.
-#
-#     Args:
-#         sparse (pd.DataFrame):
-#             Sparse DataFrame to convert to dense format.
-#         axes (list):
-#             String labels of coordinate columns in sparse DataFrame. Must have
-#             index for each axis in dense array.
-#         value (str):
-#             Label of element value column in sparse DataFrame.
-#         dtype (type, optional):
-#             Data type of dense array.
-#             Defaults to np.uint8.
-#         dims (list, optional):
-#             Shape of dense array.
-#             Defaults to None, in which case shape inferred from coordinates.
-#
-#     Returns:
-#         (np.ndarray):
-#             Dense array.
-#     """
-#     sparse = sparse[axes + [value]].to_numpy().T
-#     dims = np.max(sparse[:-1], axis=-1) if dims is None else dims
-#     dense = np.zeros(dims.astype(int) + 1, dtype=dtype)
-#     dense[tuple(sparse[:-1].astype(int))] = sparse[-1]
-#     return dense
+def dense_to_sparse(
+        arr: np.ndarray
+):
+    """
+    Extract coordinates of nonzero values in an array.
+
+    Args:
+    ---------------------------------------------------------------------------
+        arr (np.ndarray):
+            Dense array to convert to sparse format.
+
+    Returns:
+    ---------------------------------------------------------------------------
+        coords (np.ndarray):
+            Coordinates of nonzero values in arr. Has shape
+            (nonzero_count, arr.ndim).
+        values (np.ndarray):
+            Corresponding nonzero values in arr. Has shape (nonzero_count,).
+
+    Examples:
+    ---------------------------------------------------------------------------
+        Extract nonzero values from 3x10 array
+        >>> array = np.arange(30).reshape(3, 10)
+        >>> array[array % 9 != 0] = 0
+        >>> array
+        array([[ 0,  0,  0,  0,  0,  0,  0,  0,  0,  9],
+               [ 0,  0,  0,  0,  0,  0,  0,  0, 18,  0],
+               [ 0,  0,  0,  0,  0,  0,  0, 27,  0,  0]])
+        >>> coords, values = dense_to_sparse(array)
+        >>> coords
+        array([[0, 9],
+               [1, 8],
+               [2, 7]])
+        >>> values
+        array([ 9, 18, 27])
+    """
+    coords = np.nonzero(arr)
+    coords, values = np.stack(list(coords), axis=-1), arr[*coords]
+    return coords, values
+
+
+def sparse_to_dense(
+        coords: np.ndarray,
+        values: np.ndarray,
+        dims: list[int] | tuple[int] | np.ndarray[int] = None
+):
+    """
+    Convert nonzero coordinates and values into a dense array.
+
+    Args:
+    ---------------------------------------------------------------------------
+        coords (np.ndarray):
+            Coordinates of nonzero values in dense array. Has shape
+            (nonzero_count, arr.ndim).
+        values (np.ndarray):
+            Corresponding nonzero values in dense array. Has shape
+            (nonzero_count,).
+        dims (list[int] | tuple[int] | np.ndarray[int], optional):
+            Shape of dense array.
+            Defaults to None, in which case shape inferred from coordinates.
+
+    Returns:
+    ---------------------------------------------------------------------------
+        dense (np.ndarray):
+            Dense array. Dtype inferred from values.
+
+    Examples:
+    ---------------------------------------------------------------------------
+        Dense size inferred from coordinates
+        >>> arr = np.array([[0, 4], [1, 6], [0, 2]])
+        >>> values = np.array([ 9, 18, 27])
+        >>> sparse_to_dense(arr, values)
+        array([[ 0,  0, 27,  0,  9,  0,  0],
+               [ 0,  0,  0,  0,  0,  0, 18]])
+
+        Dense size specified
+        >>> dims = (3, 10)
+        >>> sparse_to_dense(arr, values, dims)
+        array([[ 0,  0, 27,  0,  9,  0,  0,  0,  0,  0],
+               [ 0,  0,  0,  0,  0,  0, 18,  0,  0,  0],
+               [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0]])
+    """
+    dims = np.max(coords, axis=0) + 1 if dims is None else dims
+    dense = np.zeros(np.asarray(dims, dtype=int), dtype=values.dtype)
+    dense[tuple(coords.T.astype(int))] = values
+    return dense

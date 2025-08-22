@@ -19,9 +19,6 @@ Processing data in arrays
 """
 
 
-
-
-
 def make_h5_dataset(
         base: h5.File | h5.Group,
         name: str,
@@ -108,3 +105,4 @@ def get_h5_shape(
 #
 #         print(f"Structure of HDF5 file: {file_path}")
 #         hf.visititems(print_item)
+
