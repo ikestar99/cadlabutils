@@ -12,16 +12,6 @@ import skimage.transform as skt
 from pystackreg import StackReg
 
 
-"""
-Helper functions for aligning stacks of imaging data using pystackreg backend,
-a python implementation of the NIH Fiji plugin TurboReg. This code uses
-pystackreg to register images (ie. determine the transofrmation matrix needed
-to transform one image onto a dissimilar static reference image). Subsequent
-transformations are performed using functions from the transfrom module of the
-builtin skimage package.
-"""
-
-
 # Instantiate registration machinery from pystackreg.
 T_REG = {
     "translation": StackReg(StackReg.TRANSLATION),
@@ -34,13 +24,9 @@ T_REG = {
 
 # Change dtype of transformed image
 D_TYPE = {
-    "bool": sku.img_as_bool,
-    "int": sku.img_as_int,
-    "uint": sku.img_as_uint,
-    "ubyte": sku.img_as_ubyte,
-    "float": sku.img_as_float,
-    "float32": sku.img_as_float32,
-    "float64": sku.img_as_float64
+    int: sku.img_as_int,
+    float: sku.img_as_float64,
+    np.uint8: sku.img_as_ubyte,
 }
 
 
@@ -49,105 +35,72 @@ def _register(
         mov: np.ndarray,
         mode: str = "rigid"
 ):
+    """Register an image to a static reference.
+
+    Parameters
+    ----------
+    ref : np.ndarray
+        2D static reference image.
+    mov : np.ndarray):
+        Image with same shape as `ref`. Registration maps mov onto ref.
+    mode : str, optional
+        Constraints of registration paradigm:
+        - "translation" --> translation in X/Y directions.
+        - "rigid" --> rigid transformations.
+        - "rotation" --> rotation and dilation.
+        - "affine" --> affine transformation.
+        - "bilinear" --> bilinear transformation.
+        Defaults to "rigid".
+
+    Returns
+    -------
+    matrix : np.ndarray
+        3x3 transformation matrix mapping `mov` onto `ref`.
+
+    Examples
+    --------
+    >>> t_ref = np.array([[1, 0, 0], [1, 1, 0], [0, 1, 0]])
+    >>> t_mov = np.array([[0, 1, 0], [0, 1, 1], [0, 0, 1]])
+    >>> _register(t_ref, t_mov)
+    array([[ 1., -0.,  0.],
+           [ 0.,  1.,  0.],
+           [ 0.,  0.,  1.]])
     """
-    Register an image to a static reference using constrained transformations.
-
-    Args:
-        ref (numpy.ndarray): 2D static reference image.
-        mov (numpy.ndarray): Image with same dimesnions as ref. Registration
-            maps mov onto ref.
-        mode (str): Constraints of registration paradigm:
-            - "translation" --> translation in X/Y directions.
-            - "rigid" --> rigid transformations.
-            - "rotation" --> rotation and dilation.
-            - "affine" --> affine transformation.
-            - "bilinear" --> bilinear transformation.
-
-    Returns:
-        numpy.ndarray: 2D transformation matrix mapping mov onto ref.
-
-    Raises:
-        ValueError: ref array is not 2D.
-        ValueError: mov array has different dimensions than ref.
-
-    Example:
-        >>> test_ref = np.array([[1, 0, 0], [1, 1, 0], [0, 1, 0]])
-        >>> test_mov = np.array([[0, 1, 0], [0, 1, 1], [0, 0, 1]])
-        >>> transformation_matrix = _register(test_ref, test_mov)
-        >>> transformation_matrix
-        array([[ 1., -0.,  0.],
-               [ 0.,  1.,  0.],
-               [ 0.,  0.,  1.]])
-
-    Error Examples:
-        # ref is not 2D
-        >>> invalid_ref = np.array([[[1, 0, 0], [1, 1, 0], [0, 1, 0]]])
-        >>> test_mov = np.array([[0, 1, 0], [0, 1, 1], [0, 0, 1]])
-        >>> transformation_matrix = _register(invalid_ref, test_mov)
-        Traceback (most recent call last):
-            ...
-        ValueError: Reference image must be 2D array.
-
-        # mov has a different shape than ref
-        >>> test_ref = np.array([[1, 0, 0], [1, 1, 0], [0, 1, 0]])
-        >>> invalid_mov = np.zeros((5,6))
-        >>> transformation_matrix = _register(test_ref, invalid_mov)
-        Traceback (most recent call last):
-            ...
-        ValueError: Move image must have same shape as reference.
-    """
-    if ref.ndim != 2:
-        raise ValueError("Reference image must be 2D array.")
-
-    if ref.shape != mov.shape:
-        raise ValueError("Move image must have same shape as reference.")
-
-    tmat = T_REG[mode].register(ref, mov)
-    return tmat
+    matrix = T_REG[mode].register(ref, mov)
+    return matrix
 
 
 def _transform(
         mov: np.ndarray,
-        tmat: np.ndarray,
+        matrix: np.ndarray,
         order: int = 0,
-        conversion: str = "ubyte"
+        dtype: type = np.uint8
 ):
+    """Transform an image using a known transformation matrix.
+
+    Parameters
+    ----------
+    mov : np.ndarray
+        2D image to be transformed.
+    matrix : np.ndarray
+        3x3 transformation matrix with which to transform mov.
+    order : int, optional
+        Passed to constructor of skimage.transform.warp. Specifies
+        interpolation paradigm for transformation. Valid values are integers on
+        range [0 (nearest-neighbor), 5 (bi-quintic)].
+        Defaults to 0.
+    dtype : type, optional
+        Datatype of warped image. Must be int, float, or np.uint8.
+        Defaults to np.uint8.
+
+    Returns
+    -------
+    moved : np.ndarray
+        Transformed image.
     """
-    Transform an image using a known transformation matrix.
-
-    Args:
-        mov (numpy.ndarray): 2D image to be transformed.
-        tmat (numpy.ndarray): 2D transformation matrix with which to transform
-            mov. Matrix should be a 3x3.
-        order (int): Passes to constructor of skimage.transform.warp. Specifies
-            interpolation paradigm for transformation. Accepted values include:
-            - 0 --> Nearest-neighbor (default)
-            - 1 --> Bi-linear
-            - 2 --> Bi-quadratic
-            - 3 --> Bi-cubic
-            - 4 --> Bi-quartic
-            - 5 --> Bi-quintic
-
-            Of note, nearest-neightbor interpolation is preferred for low-bit
-            ("pixelated") images as it preserves the original pixel values.
-        conversion (str): function used to alter the data type of
-            the transformed image. supported inputs are:
-            - bool --> boolean
-            - int --> 16-bit signed integer
-            - uint --> 16-bit unsigned integer
-            - ubyte --> 8-bit unsigned integer (default)
-            - float --> floating point
-            - float32 --> single-precision (32-bit) floating point
-            - float64 --> double-precision (64-bit) floating point
-
-    Returns:
-        numpy.ndarray: Transformed 2D image.
-    """
-    # transform image with nearest neighbor interpolation using skimage
-    mov = skt.warp(mov, tmat, order=order, mode="constant", cval=0)
-    # convert foating-point image to an unsigned 8-bit image
-    mov = D_TYPE[conversion](mov)
-    return mov
+    moved = skt.warp(mov, matrix, order=order, mode="constant", cval=0)
+    moved = D_TYPE[dtype](moved)
+    return moved
 
 
 def align_image(
