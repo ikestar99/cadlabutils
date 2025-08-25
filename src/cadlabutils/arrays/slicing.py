@@ -51,8 +51,8 @@ def arr_slice(
 
     Returns
     -------
-        tuple
-            Slice object for each index in `start`.
+    tuple
+        Slice object for each index in `start`.
 
     Examples
     --------

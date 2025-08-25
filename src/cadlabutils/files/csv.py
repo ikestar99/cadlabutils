@@ -6,49 +6,7 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
-import numpy as np
-import shutil
-import tifffile as tf
-
 from pathlib import Path
-
-
-"""
-File path access and manipulation
-===============================================================================
-"""
-
-
-def remove_path(
-        path_: Path
-):
-    """
-    Remove a path or directory if it exists.
-
-    Args:
-        path_ (Path):
-            Path to file or directory to remove.
-    """
-    if path_.is_dir():
-        shutil.rmtree(path_)
-    else:
-        path_.unlink()
-
-
-def copy_path(
-        src: Path,
-        dst: Path
-):
-    """
-    Copy a path to a new location.
-
-    Args:
-        src (Path):
-            Path to file to copy.
-        dst (Path):
-            Destination of copied path.
-    """
-    shutil.copy(src, dst)
 
 
 def find_first_row(
@@ -95,27 +53,3 @@ def find_first_row(
         raise ValueError("Either path_csv or raw_text must be provided")
 
     return skip
-
-
-def save_tif(
-        array: np.ndarray,
-        file: Path,
-        dtype: type = np.uint8,
-):
-    """
-    Save array as tif image.
-
-    NOTE: if saving a projection, axes arg can either be the axis order of the
-    projection itself ("YX" for a z projection) or the axis projected ("z" or
-    "Z").
-
-    Args:
-        array (ndarray):
-            Array to save.
-        file (Path):
-            Path to save image data (tif).
-        dtype (type, optional):
-            Desired datatype of saved array.
-            Defaults to np.uint8.
-    """
-    tf.imwrite(file, array.astype(dtype), compression="zlib")
