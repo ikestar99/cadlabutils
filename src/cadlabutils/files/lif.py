@@ -12,6 +12,63 @@ from pathlib import Path
 from readlif.reader import LifFile
 
 
+def lif_tree(
+        file: Path
+):
+    """Extract structure of a Leica Image File from available metadata.
+
+    Parameters
+    ----------
+    file : Path
+        Path to file (.lif).
+
+    Returns
+    -------
+    tree : dict[str: dict[str, int | tuple]]
+        Structure of stored data. Keys are names of jobs stored in file. Value
+        is another dictionary with the following structure per job:
+        -   "T Z Y X": (time points, z planes, y planes, x planes).
+        -   "Hz µm/p": resolutions in (Hz, z µm/pixel, y µm/pixel, x µm/pixel)
+        -   "channel": number of channels stored in image
+        -   "mosaic": position of mosaic tile if used.
+
+    Notes
+    -----
+    - See https://readlif.readthedocs.io/en/stable/ for additional information
+      on mosaic tiling using readlif.
+
+    Examples
+    --------
+    >> from ... import print_tree
+
+
+    >> test_tree = lif_tree(Path(".../file.lif"))
+    >> print_tree(test_tree, color=False)
+    2024.02.13.MTG.S1.C1.C2.lif
+    └── 2024.02.13.MTG.S1.C1.C2.Z
+        ├── T Z Y X: (1, 147, 5797, 3921)
+        ├── Hz µm/p: ('-', 0.41855, 0.10317, 0.10317)
+        ├── channel: 1
+        └── mosaic: []
+    """
+    tree = {}
+    for image in LifFile(file).get_iter_image():
+        d = image.dims
+
+        # reorder resolution values to T, Z, Y, X
+        r = ["-" if r is None else r for r in list(image.scale[::-1])]
+
+        # convert spatial resolutions to ¨m/pixel
+        r[1:] = [r if isinstance(r, str) else 1/r for r in r[1:]]
+        tree[image.name] = {
+            "T Z Y X": (d.t, d.z, d.y, d.x),
+            "Hz µm/p": tuple(r),
+            "channel": image.channels,
+            "mosaic": image.mosaic_position}
+
+    return tree
+
+
 def unpack_lif(
         sample_dir: Path,
         data_h5: Path,
