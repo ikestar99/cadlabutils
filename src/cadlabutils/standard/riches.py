@@ -10,17 +10,24 @@ from rich.tree import Tree
 from rich.console import Console
 
 
-def print_rich_tree(d, title="tree", color=True):
+def print_rich_tree(
+        data,
+        title: str = "tree",
+        color: bool = True
+):
     """
     Pretty-print a nested dictionary using rich's Tree with ├── and └──.
 
     Parameters
     ----------
-    d : dict
+    data : dict
         Dictionary to print. Values may be dict or simple types.
     title : str, optional
         Title of the tree root node.
         Defaults to "tree".
+    color : bool, optional
+        If True, print tree branches and leaf labels in color.
+        Defaults to True.
 
     Examples
     --------
@@ -31,7 +38,10 @@ def print_rich_tree(d, title="tree", color=True):
     ...     },
     ...     "dinner": {
     ...         "drink": ("water", "tea", "soda"),
-    ...         "entreé": {"steak": ["filet", "strip"]},
+    ...         "entreé": {
+    ...             "steak": ("filet", "strip"),
+    ...             "pasta": ("ragú", "pesto")
+    ...         },
     ...     }
     ... }
     >>> print_rich_tree(test_data, title="menu", color=False)
@@ -42,7 +52,8 @@ def print_rich_tree(d, title="tree", color=True):
     └── dinner
         ├── drink: ('water', 'tea', 'soda')
         └── entreé
-            └── steak: ['filet', 'strip']
+            ├── steak: ('filet', 'strip')
+            └── pasta: ('ragú', 'pesto')
     """
     def _add_dict_to_tree(d, tree):
         for k, v in d.items():
@@ -53,5 +64,5 @@ def print_rich_tree(d, title="tree", color=True):
                 tree.add(f"[green]{k}[/]: {v}")
 
     tree = Tree(f"[bold red1]{title}[/]")
-    _add_dict_to_tree(d, tree)
+    _add_dict_to_tree(data, tree)
     Console(force_terminal=color).print(tree)

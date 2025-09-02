@@ -23,7 +23,7 @@ def make_zarr(
         chunk: tuple[int],
         dtype: type = np.uint8,
         fill: float = 0.0,
-        compressor: type = None,
+        compressor: type = "blosc",
         **kwargs
 ):
     """Create zarr file with set fill value.
@@ -33,7 +33,7 @@ def make_zarr(
     file : Path
         Path to save zarr file (.zarr).
     shape : tuple[int]
-        Shape of array stored in zarr file.
+        Shape of array to store in zarr file.
     chunk : tuple[int]
         Shape of data chunks stored in zarr file.
     dtype : type, optional
@@ -42,18 +42,21 @@ def make_zarr(
     fill : float, optional
         Default value of array indices not written to zarr file.
         Defaults to 0.0.
-    compressor : type, optional
-        File compression. Passed to zarr.open function call.
-        Defaults to Blosc.
-    **kwargs
-        Keyword arguments passed to zarr.open.
 
     Returns
     -------
     zarr_file : zarr.Array
-        Instantiated zarr file.
+        Opened zarr file.
+
+    Other Parameters
+    ----------------
+    compressor : optional
+        File compression. Passed to zarr.open function call.
+        Defaults to "blosc".
+    **kwargs : dict
+        Keyword arguments passed to zarr.open.
     """
-    compressor = compressor if compressor is not None else Blosc(
+    compressor = compressor if compressor != "blosc" else Blosc(
         cname="zstd", clevel=5, shuffle=Blosc.BITSHUFFLE)
     zarr_file = zarr.open(
         file, mode="w", shape=shape, chunks=chunk, dtype=dtype,

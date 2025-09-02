@@ -15,12 +15,6 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 
 
-"""
-html-based data access dataset access 
-===============================================================================
-"""
-
-
 def list_directory(
         dir_url: str,
         links_only: bool

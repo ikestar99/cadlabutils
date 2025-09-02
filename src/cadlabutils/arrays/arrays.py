@@ -137,7 +137,7 @@ def min_max_scaling(
         Defaults to 1.
     dtype : np.dtype, optional
         Data type of the scaled array.
-        Defaults to None, in which case return type is np.float64.
+        Defaults to None, in which case return type same as `arr` dtype.
 
     Returns
     -------
@@ -166,11 +166,11 @@ def min_max_scaling(
     >>> t_max
     np.int64(8)
     """
+    dtype = arr.dtype if dtype is None else dtype
     old_min, old_max = np.min(arr), np.max(arr)
     scaled = (arr - old_min) / (old_max - old_min)
     scaled = (scaled * (new_max - new_min)) + new_min
-    scaled = scaled if dtype is None else scaled.astype(dtype)
-    return scaled, old_min, old_max
+    return scaled.astype(dtype), old_min, old_max
 
 
 def masked_statistic(
@@ -189,7 +189,7 @@ def masked_statistic(
         Shape must match trailing dimensions of `arr`.
     func : Callable, optional
         Numpy-compatible function used to aggregate values within a region.
-        Must accept an "axis" keyword argument.
+        Must accept an `axis` keyword argument.
         Defaults to np.mean.
 
     Returns

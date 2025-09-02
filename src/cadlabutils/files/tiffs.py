@@ -23,12 +23,17 @@ def save_tif(
     Parameters
     ----------
     file : Path
-        Path to save image (tif).
+        Path to save image (.tif).
     arr : np.ndarray
-        Array data to save.
+        Array to save as image.
     axes : str
-        Axis order of tif image. Z stack is "ZYX". Saved as ImageJ metadata.
-    **kwargs
+        Axis order of tif image. Z stack is "ZYX".
+
+    Other Parameters
+    ----------------
+    **kwargs : dict
+        Keyword arguments passed to tifffile.imwrite.
     """
     tf.imwrite(
-        file, arr, imagej=True, metadata={"axes": axes}, compression="zlib")
+        file, arr, imagej=True, metadata={"axes": axes}, compression="zlib",
+        **kwargs)

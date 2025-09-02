@@ -16,21 +16,24 @@ dependencies = [
   "pandas~=2.2.3",
   "scipy~=1.16.0",
   "matplotlib~=3.10.0",
-  "rich~=13.9.4,"
+  "rich~=13.9.4",
 ]
 
 [project.optional-dependencies]
-arr_utils = [
+arrays = [
   "pystackreg~=0.2.8",
   "scikit-image~=0.25.2"
 ]
 
-file_utils = [
-  "zarr~=2.18.3",
-  "numcodecs~=0.14.1",
+files = [
+  "bs4~=4.13.5",
   "h5py~=3.13.0",
   "hdf5plugin~=5.1.0",
-  "readlif~=0.6.5"
+  "natsort~=8.4.0",
+  "numcodecs~=0.14.1",
+  "readlif~=0.6.5",
+  "tifffile~=2025.2.18",
+  "zarr~=2.18.3",
 ]
 
 torch_utils = [
