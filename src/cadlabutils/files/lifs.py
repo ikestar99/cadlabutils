@@ -24,7 +24,7 @@ def get_metadata(
 
     Returns
     -------
-    shape : tuple
+    shape : tuple[int]
         Shape of `lif_image` in (M, C, T, Z, Y, X).
     dtype : type
         Data type of `lif_image`.
@@ -36,7 +36,7 @@ def get_metadata(
     return shape, dtype
 
 
-def get_lif_image(
+def get_image(
         file: Path,
         idx: int
 ):
@@ -58,12 +58,12 @@ def get_lif_image(
     return lif_image
 
 
-def get_image_substack(
+def get_substack(
         lif_image: LifImage,
-        c_range: tuple[int, ...] | slice | None,
-        t_range: tuple[int, ...] | slice | None,
-        z_range: tuple[int, ...] | slice | None,
-        m_range: tuple[int, ...] | slice | None = (0,)
+        c_range: tuple[int, ...] | list[int, ...] | None,
+        t_range: tuple[int, ...] | list[int, ...] | None,
+        z_range: tuple[int, ...] | list[int, ...] | None,
+        m_range: tuple[int, ...] | list[int, ...] | None = (0,)
 ):
     """Extract image data from Leica Lif Image.
 
@@ -71,44 +71,44 @@ def get_image_substack(
     ----------
     lif_image : LifImage
         Opened lif image.
-    c_range : tuple[int, ...] | slice | None
+    c_range : tuple[int, ...] | list[int, ...] | None
         Channel indices to extract. If None, extract all channels.
-    t_range : tuple[int, int] or None
-        Frame indices to extract. If None, extract all time points.
-    z_range : tuple[int, int] or None
+    t_range : tuple[int, ...] | list[int, ...] | None
+        Frame indices to extract. If None, extract all frames.
+    z_range : tuple[int, ...] | list[int, ...] | None
         Z slice indices to extract. If None, extract all z slices.
 
     Returns
     -------
-    np.ndarray
+    arr : np.ndarray
         6D array of image data. `arr` has shape:
         (len(`m_range`), len(`c_range`), len(`t_range`), len(`z_range`),
         Y pixels, X pixels).
 
     Other Parameters
     ----------------
-    m_range : tuple[int, ...] | slice | None
+    m_range : tuple[int, ...] | list[int, ...] | None, optional
         Mosaic indices to extract. If None, extract all mosaic indices.
         Defaults to (0,), in which case only first mosaic index is extracted.
     """
-    (max_m, max_c, max_t, max_z, _, _), _ = get_metadata(lif_image)
-    arr = []
-    for m in (slice(max_m) if m_range is None else m_range):
-        c_arr = []
-        for c in (slice(max_c) if c_range is None else c_range):
-            t_arr = []
-            for t in (slice(max_t) if t_range is None else t_range):
-                z_arr = []
-                for z in (slice(max_z) if z_range is None else z_range):
-                    z_arr += [lif_image.get_frame(z=z, c=c, t=t, m=m)]
+    shape, dtype = get_metadata(lif_image)
+    new_shape, bounds = [], []
+    for d, r in zip(shape[:-2], (m_range, c_range, t_range, z_range)):
+        new_shape += [d if r is None else len(r)]
+        bounds += [range(d) if r is None else r]
 
-                t_arr += [np.stack(z_arr, axis=0)]
-            c_arr += [np.stack(t_arr, axis=0)]
-        arr += [np.stack(c_arr, axis=0)]
-    return np.stack(arr, axis=0)
+    arr = np.empty(shape=new_shape + list(shape[-2:]), dtype=dtype)
+    for mdx, m in enumerate(bounds[0]):
+        for cdx, c in enumerate(bounds[1]):
+            for tdx, t in enumerate(bounds[2]):
+                for zdx, z in enumerate(bounds[3]):
+                    arr[mdx, cdx, tdx, zdx] = lif_image.get_frame(
+                        z=z, c=c, t=t, m=m)
+
+    return arr
 
 
-def lif_tree(
+def get_tree(
         file: Path
 ):
     """Extract structure of a Leica Image File from available metadata.
@@ -139,7 +139,7 @@ def lif_tree(
     >> from ... import print_tree
 
 
-    >> test_tree = lif_tree(Path(".../file.lif"))
+    >> test_tree = get_tree(Path(".../file.lif"))
     >> print_tree(test_tree, color=False)
     2024.02.13.MTG.S1.C1.C2.lif
     └── 0: 2024.02.13.MTG.S1.C1.C2.Z

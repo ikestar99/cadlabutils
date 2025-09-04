@@ -37,7 +37,7 @@ def get_metadata(
         return dset.shape, dset.dtype
 
 
-def h5_tree(
+def get_tree(
         file: Path
 ):
     """Extract structure of a hdf5 file from available metadata.
@@ -60,7 +60,7 @@ def h5_tree(
     >> from ... import print_tree
 
 
-    >> test_tree = h5_tree(Path(".../file.h5"))
+    >> test_tree = get_tree(Path(".../file.h5"))
     >> print_tree(test_tree, color=False)
     data
     ├── mask

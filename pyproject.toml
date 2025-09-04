@@ -12,11 +12,11 @@ authors = [
 
 # Runtime dependencies (adjust as needed)
 dependencies = [
-  "numpy~=2.3.1",
-  "pandas~=2.2.3",
-  "scipy~=1.16.0",
-  "matplotlib~=3.10.0",
-  "rich~=13.9.4",
+  "numpy",
+  "pandas",
+  "scipy",
+  "matplotlib",
+  "rich",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +32,7 @@ files = [
   "natsort~=8.4.0",
   "numcodecs~=0.14.1",
   "readlif~=0.6.5",
+  "requests~=2.32.4",
   "tifffile~=2025.2.18",
   "zarr~=2.18.3",
 ]
