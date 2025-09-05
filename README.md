@@ -39,12 +39,16 @@
 <!-- Table of Contents -->
 # Table of Contents
 
-- [About the Project](#about-the-project)
-  * [Tech Stack](#tech-stack)
-  * [Features](#features)
-- [Getting Started](#getting-started)
-  * [Installation](#installation)
-  * [Run Locally](#run-locally)
+
+<details>
+<summary>Installation</summary>
+
+- [Environment](#environment)  
+- [Install From Source](#install-from-source)  
+- [Dependencies](#dependencies)  
+
+</details>
+
 - [Usage](#usage)
 - [Contributing](#contributing)
 - [License](#license)
@@ -52,78 +56,113 @@
 - [Acknowledgements](#acknowledgements)
   
 
-<!-- About the Project -->
-## About the Project
+[//]: # (<div align="center"> )
+[//]: # (  <img src="https://placehold.co/600x400?text=Your+Screenshot+here" alt="screenshot" />)
+[//]: # (</div>)
 
-<div align="center"> 
-  <img src="https://placehold.co/600x400?text=Your+Screenshot+here" alt="screenshot" />
-</div>
-
-
-<!-- TechStack -->
-### Tech Stack
-
-<details>
-  <summary>Client</summary>
-  <ul>
-    <li><a href="https://www.typescriptlang.org/">Typescript</a></li>
-
-  </ul>
-</details>
-
-<details>
-  <summary>Server</summary>
-  <ul>
-    <li><a href="https://www.typescriptlang.org/">Typescript</a></li>
-  </ul>
-</details>
-
-
-<!-- Features -->
-### Features
-
-- Feature 1
-- Feature 2
-- Feature 3
-
-
-<!-- Getting Started -->
-## Getting Started
 
 <!-- Installation -->
-### Installation
+## Installation
 
-Install my-project with npm
+
+<!-- env prep -->
+### Environment
+Create a dedicated environment for your project.
 
 ```bash
-  yarn install my-project
-  cd my-project
+# conda
+conda create -n myenv python=3.13.5
+conda activate myenv
+
+# pip/venv:
+python3.13 -m venv myenv
+source myenv/bin/activate   # Linux/macOS
+myenv\Scripts\activate      # Windows PowerShell
+```
+
+Alternatively, activate an existing environment for an established project.
+```bash
+# conda
+conda activate myenv
+
+# pip/venv:
+source myenv/bin/activate   # Linux/macOS
+myenv\Scripts\activate      # Windows PowerShell
 ```
 
 
-<!-- Run Locally -->
-### Run Locally
+<!-- Install From Source -->
+### Install From Source
 
-Clone the project
-
+Install `cadlabutils` directly from GitHub, w/o optional dependencies.
 ```bash
-  git clone https://github.com/Louis3797/awesome-readme-template.git
+# Minimal installation
+pip install "git+https://github.com/ikestar99/cadlabutils.git"
+
+# Array manipulation tools
+pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[arrays]"
+
+# File manipulation tools
+pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[files]"
+
+# Pytorch utilities
+pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[learning]"
+
+# Complete install
+pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[dev]"
+```
+
+Clone repo and install in editable configuration for local development
+```bash
+# clone project in current working directory
+git clone https://github.com/ikestar99/cadlabutils.git
+cd ./cadlabutils
+pip install -e ".[dev]"
+```
+
+
+<!-- Dependencies -->
+### Dependencies
+
+cadlabutils includes a set of optional dependencies for:
+- `[arrays]`: array operations
+- `[files]`: specific file extensions
+- `[learning]`: deep learning with [`pytorch`](https://pytorch.org/)
+- See [`pyproject.toml`](https://github.com/ikestar99/cadlabutils/blob/main/pyproject.toml) for specific packages
+in each set of optional dependencies.
+
+Some included utilities and dependencies aren't applicable to all projects, such as
+[`zarr`](https://zarr.readthedocs.io/en/stable/). These imports are limited to the submodules that use them directly.
+Thus, a project that requires [`h5py`](https://www.h5py.org/) but not [`zarr`](https://zarr.readthedocs.io/en/stable/)
+need not install all packages included in the `[files]` optional dependency build.
+
+Instead, use a minimal install of `cadlabutils` and import only the modules you need:
+```python
+import cadlabutils.files.h5s as cdu_h5
+
+
+with cdu_h5.File("/tmp/path.h5", mode="w") as data:
+    dset = cdu_h5.make_dataset(data, name="dataset_0", shape=(100, 100), dtype=int)
+```
+
+Other modules contain dependencies that are often used in combination, and thus share a single namespace and should be
+installed together.
+```python
+from pathlib import Path
+
+import cadlabutils.learning as cdu_l
+
+
+model = cdu_l.SNEMI3D(c_i=1, c_o=3)
+checkpoint_pth = Path("/Path/to/saved/weights.safetensors")
+model, _ = cdu_l.load(checkpoint_pth, model, device=cdu_l.get_device(None))
 ```
 
 
 <!-- Usage -->
 ## Usage
 
-Use this space to tell a little more about your project and how it can be used. Show additional screenshots, code samples, demos or link to other resources.
-
-
-```javascript
-import Component from 'my-project'
-
-function App() {
-  return <Component />
-}
-```
+TBD
 
 
 <!-- Contributing -->
@@ -149,6 +188,7 @@ Ike Ogbonna, MS (Ike.Ogbonna@ucsf.edu - ikestar99@hotmail.com)
 Cathryn Cadwell, MD, PhD (Cathryn.Cadwell@ucsf.edu)
 
 Project Link: [https://github.com/Louis3797/awesome-readme-template](https://github.com/Louis3797/awesome-readme-template)
+
 
 <!-- Acknowledgments -->
 ## Acknowledgements

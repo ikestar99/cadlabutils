@@ -6,4 +6,7 @@ Created on Tue Aug 12 09:00:00 2025
 """
 
 
+from .funcs import *
+from .classes import *
+from .modules import *
 from .convnets import *

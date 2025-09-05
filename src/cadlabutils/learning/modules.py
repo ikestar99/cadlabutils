@@ -25,7 +25,7 @@ def make_block(
     ----------
     layer : nn.Module
         Instantiated neural network layer to include in block.
-    c_out (int
+    c_out : int
         Number of output channels in layer.
     norm : str, optional
         Type of batch normalization to perform. Can be "1d", "2d", or "3d".

@@ -93,7 +93,7 @@ def get_tree(
 def make_dataset(
         base: File | Group,
         name: str,
-        shape: tuple[int],
+        shape: tuple[int, ...],
         dtype: type,
         fill: float | str = 0.0,
         use_blosc: bool = True,
@@ -107,7 +107,7 @@ def make_dataset(
         Location in which to create a dataset.
     name : str
         Name of dataset.
-    shape : tuple[int]
+    shape : tuple[int, ...]
         Shape of dataset.
     dtype : type | str
         Data type of dataset.

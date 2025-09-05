@@ -1,5 +1,5 @@
 [project]
-name = "your_package"
+name = "cadlabutils"
 version = "0.1.0"
 description = "python utility functions for patch-seq data analysis"
 readme = "README.md"
@@ -21,34 +21,30 @@ dependencies = [
 
 [project.optional-dependencies]
 arrays = [
-  "pystackreg~=0.2.8",
-  "scikit-image~=0.25.2"
+  "pystackreg",
+  "scikit-image"
 ]
 
 files = [
-  "bs4~=4.13.5",
+  "bs4",
   "h5py~=3.13.0",
   "hdf5plugin~=5.1.0",
-  "natsort~=8.4.0",
+  "natsort",
   "numcodecs~=0.14.1",
-  "readlif~=0.6.5",
-  "requests~=2.32.4",
-  "tifffile~=2025.2.18",
+  "readlif",
+  "requests",
+  "tifffile",
   "zarr~=2.18.3",
 ]
 
-torch_utils = [
+learning = [
   "torch~=2.7.1",
   "safetensors~=0.5.3",
   "scikit-learn~=1.6.1",
 ]
 
 dev = [
-  "pytest",
-  "black",
-  "ruff",
-  "mypy",
-  "your_package[util1,util2]"
+  "cadlabutils[arrays,files,learning]"
 ]
 
 [project.urls]
@@ -79,6 +75,6 @@ line-length = 88
 target-version = "py38"
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.13.5"
 strict = true
 files = ["src", "tests"]

@@ -10,32 +10,37 @@ import torch
 import torch.nn as nn
 
 from pathlib import Path
-
 from torch.optim import Optimizer
 from torch.utils.data import Dataset, DataLoader
 from safetensors.torch import save_file, load_file
 
 
-"""
-Utility functions for Pytorch models and training workflows.
-"""
-
-
 def count_parameters(
         model: nn.Module
 ):
-    """
-    Identify total and trainable parameter counts for a model.
+    """Count total and trainable parameter in a model.
 
-    Args:
-        model (nn.Module):
-            Model for which to count parameters.
+    Parameters
+    ----------
+    model : nn.Module
+        Model for which to count parameters.
 
-    Returns:
-        total (int):
-            Total number of parameters.
-        trainable (int):
-            Total number of trainable parameters.
+    Returns
+    -------
+    total : int
+        Total number of parameters.
+    trainable : int
+        Total number of trainable parameters.
+
+    Examples
+    --------
+    Parameters in simple dense linear model.
+    >>> test_model = nn.Sequential(*[nn.Linear(10, 10) for _ in range(5)])
+    >>> total_count, trainable_count = count_parameters(test_model)
+    >>> total_count
+    550
+    >>> trainable_count
+    550
     """
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -45,18 +50,28 @@ def count_parameters(
 def get_device(
         gpu: int | None = 0
 ):
-    """
-    Identify a CUDA-enabled device on which to perform parallelized
-    computations. Will use CPU if CUDA and/or GPU are unavailable.
+    """Identify a CUDA-enabled device on which to perform computation.
 
-    Args:
-        gpu (int | None, optional):
-            Index of CUDA device to use. if None, use CPU.
-            Defaults to 0.
+    Parameters
+    ----------
+    gpu : int | None, optional
+        Index of CUDA device to use. if None, use CPU.
+        Defaults to 0.
 
-    Returns:
-        device (torch.device):
-            Device on which to perform computations.
+    Returns
+    -------
+    device : torch.device
+        Device on which to perform computations.
+
+    Notes
+    -----
+    Will use CPU if CUDA and/or GPU are unavailable.
+
+    Examples
+    --------
+    Get cpu device.
+    >>> get_device(None)
+    device(type='cpu')
     """
     device = torch.device(
         f"cuda:{min(gpu, torch.cuda.device_count() - 1)}"
@@ -71,24 +86,25 @@ def get_loader(
         workers: int = 4,
         **kwargs
 ):
-    """
-    Create a DataLoader from a Dataset.
+    """Create a DataLoader from a Dataset.
 
-    Args:
-        dataset (Dataset):
-            Dataset to wrap in a DataLoader.
-        batch_size (int):
-            Number of samples per batch.
-        shuffle (bool):
-            If True, shuffle dataset indices before forming batches.
-            Defaults to True.
-        workers (int, optional):
-            Number of parallel workers.
-            Defaults to 4.
+    Parameters
+    ----------
+    dataset : Dataset
+        Dataset to wrap in a DataLoader.
+    batch_size : int
+        Number of samples per batch.
+    shuffle : bool
+        If True, shuffle dataset indices before forming batches.
+        Defaults to True.
+    workers : int, optional
+        Number of parallel workers.
+        Defaults to 4.
 
-    Returns:
-        loader (DataLoader):
-            Instantiated DataLoader.
+    Returns
+    -------
+    loader : DataLoader
+        Instantiated DataLoader.
     """
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle, num_workers=workers,
@@ -102,26 +118,25 @@ def set_mode(
         device: torch.device,
         dtype: torch.dtype = torch.float32,
 ):
-    """
-    Prepare model for either train or test passes.
+    """Prepare model for either train or test passes.
 
-    Args:
-        model (nn.Module):
-            Model with which to perform inference.
-        train (bool):
-            If True, prepare model for backpropagation by enabling gradients.
-            If False, Prepare for inference by disabling gradients and
-            computation graph.
-        device (torch.device):
-            Device on which to perform computations.
-        dtype (torch.dtype, optional):
-            Datatype of model parameters.
-            Defaults to torch.float32, or single-precision.
+    Parameters
+    ----------
+    model : nn.Module
+        Model with which to perform inference.
+    train : bool
+        If True, enable gradients and computation graph.
+    device : torch.device
+        Device on which to perform computations.
+    dtype : torch.dtype, optional
+        Datatype of model parameters.
+        Defaults to torch.float32, or single-precision.
 
-    Returns:
-        model (nn.Module):
-            Model with which to perform inference, prepared for specified mode
-            and transferred to device with indicated precision.
+    Returns
+    -------
+    model : nn.Module
+        Model with which to perform inference, prepared for specified mode
+        and transferred to device with indicated precision.
     """
     model = model.to(device, dtype=dtype)
     model = model.train() if train else model.eval()
@@ -139,38 +154,42 @@ def forward_pass(
         sample_dtype: torch.dtype = torch.float32,
         target_dtype: torch.dtype = torch.int64
 ):
-    """
-    Run inference and compute loss if target and loss function are available.
+    """Run inference and compute loss if relevant.
 
-    Args:
-        model (nn.Module):
-            Model with which to perform inference.
-        sample (torch.tensor):
-            Input data on which to run inference.
-        device (torch.device, optional):
-            Device on which to perform inference.
-        target (torch.tensor, optional):
-            Ground truth labels corresponding to the input samples.
-            Defaults to None, in which case loss is not computed.
-        criterion (nn.Module, optional):
-            Instantiated loss function to use for backpropagation.
-            Defaults to None, in which case loss is not computed.
-        optimizer (Optimizer, optional):
-            Instantiated optimizer used for model parameter optimization after
-            backpropagation.
-            Defaults to None, in which case gradients are unaltered.
-        sample_dtype (torch.dtype, optional):
-            Datatype of input sample. Should match model datatype.
-            Defaults to torch.float32, or single-precision.
-        target_dtype (torch.dtype, optional):
-            Datatype of input sample. Should match loss function.
-            Defaults to torch.int64.
+    Parameters
+    ----------
+    model : nn.Module
+        Model with which to perform inference.
+    sample : torch.tensor
+        Input data on which to run inference.
+    device : torch.device, optional
+        Device on which to perform inference.
+    target : torch.tensor, optional
+        Ground truth labels corresponding to the input samples.
+        Defaults to None, in which case loss is not computed.
+    criterion : nn.Module, optional
+        Instantiated loss function to use for backpropagation.
+        Defaults to None, in which case loss is not computed.
+    optimizer : Optimizer, optional
+        Instantiated optimizer used for model parameter optimization after
+        backpropagation.
+        Defaults to None, in which case gradients are unaltered.
 
-    Returns:
-        output (torch.tensor):
-            Output of forward pass through model.
-        loss (torch.tensor | None):
-            Output of criterion. Value is None if loss is not computed.
+    Returns
+    -------
+    output : torch.tensor
+        Output of forward pass through model.
+    loss : torch.tensor | None
+        Output of criterion. Value is None if loss is not computed.
+
+    Other Parameters
+    ----------------
+    sample_dtype : torch.dtype, optional
+        Datatype of input sample. Should match model datatype.
+        Defaults to torch.float32, or single-precision.
+    target_dtype : torch.dtype, optional
+        Datatype of input sample. Should match loss function.
+        Defaults to torch.int64.
     """
     loss = None
     if None not in (target, criterion, optimizer):
@@ -202,37 +221,39 @@ def simulate_batch_size(
         start_size: int = 1,
         scalar: float = 0.75
 ):
-    """
-    Use forward pass to simulate the optimum batch size that can fit on a given
-    hardware device. Optimum size is a set percentage of the maximum size that
-    will fit in memory without raising a RunetimeError or OutOfMemoryError.
+    """Simulate optimum batch size that can fit on a given hardware device.
 
-    Args:
-        model (nn.Module):
-            Model with which to perform inference.
-        sample (torch.tensor):
-            Input data on which to run inference. Should not include a batch
-            dimension.
-        device (torch.device, optional):
-            Device for which to compute an optimum batch size.
-        target (torch.tensor, optional):
-            Ground truth labels corresponding to the input samples. Should not
-            include a batch dimension.
-            Defaults to None, in which case loss is not computed.
-        criterion (nn.Module, optional):
-            Instantiated loss function. Passed to forward_pass function.
-        optimizer (Optimizer, optional):
-            Instantiated optimizer. Passed to forward_pass function.
-        start_size (int, optional):
-            Known safe batch size with which to begin search.
-            Defaults to 1.
-        scalar (float, optional):
-            Fraction of peak size to return as optimum batch size.
-            Defaults to 0.75.
+    Parameters
+    ----------
+    model : nn.Module
+        Model with which to perform inference.
+    sample : torch.tensor
+        Input data on which to run inference. Should not include a batch
+        dimension.
+    device : torch.device, optional
+        Device for which to compute an optimum batch size.
+    target : torch.tensor, optional
+        Ground truth labels corresponding to the input samples. Should not
+        include a batch dimension.
+        Defaults to None, in which case loss is not computed.
+    criterion : nn.Module, optional
+        Instantiated loss function. Passed to forward_pass function.
+    optimizer : Optimizer, optional
+        Instantiated optimizer. Passed to forward_pass function.
 
-    Returns:
-        (int):
-            Scaled peak batch size.
+    Returns
+    -------
+    scaled_max : int
+        Scaled peak batch size.
+
+    Other Parameters
+    ----------------
+    start_size : int, optional
+        Known safe batch size with which to begin search.
+        Defaults to 1.
+    scalar : float, optional
+        Fraction of peak size to return as optimum batch size.
+        Defaults to 0.75.
     """
     bs_l, bs_h = start_size, start_size
     binary_search = False
@@ -250,7 +271,8 @@ def simulate_batch_size(
         # stop if binary search active and no additional increase possible
         delta = (bs_h - bs_l) // 2
         if binary_search and delta <= 1:
-            return max(1, int(bs_l * scalar))
+            scaled_max = max(1, int(bs_l * scalar))
+            return scaled_max
 
         try:
             # forward pass w/o backpropagation and optimization
@@ -283,18 +305,35 @@ def save(
         model: nn.Module,
         **kwargs
 ):
-    """
-    Save model parameters as a series of checkpoint files.
+    """Save model parameters as series of checkpoint files.
 
-    Args:
-        file (Path):
-            location in which to safe checkpoints.
-        model (nn.module):
-            Model to save in checkpoint file. Model parameters are saved using
-            secure .safetensors format.
-        **kwargs
-            Keyword arguments. Additional items (ex. optimizer state) are saved
-            in a tandem .pth file.
+    Parameters
+    ----------
+    file : Path
+        location in which to safe checkpoints.
+    model : nn.module
+        Model to save in checkpoint file.
+    **kwargs
+        Keyword arguments. Additional items are saved in a tandem .pth file.
+
+    See Also
+    --------
+    cadlabutils.learning.funcs.load : Complementary load function.
+
+    Notes
+    -----
+    Saving a model yields at least one file, a .safetensors file that stores
+    model parameters in a secure pickle-independent format. Any additional
+    values are saved as a dictionary in a pytorch .pth file. If this secondary
+    file already exists, key: value pairs will be overwritten if that match
+    keys specified in `kwargs`. Remaining key: value pairs are preserved.
+
+    Examples
+    --------
+    Save model with additional mid-training data.
+    >> test_model = nn.Sequential(*[nn.Linear(10, 10) for _ in range(5)])
+    >> test_path = Path("~/Desktop/test_save")
+    >> save(test_path, test_model, epoch=10)
     """
     # save model parameters as safetensors format
     save_file(model.state_dict(), file.with_suffix(".safetensors"))
@@ -303,7 +342,7 @@ def save(
     if len(kwargs) > 0:
         file_pth = file.with_suffix(".pth")
         saved = torch.load(file_pth) if file_pth.is_file() else {}
-        saved = saved.update(kwargs)
+        saved.update(kwargs)
         torch.save(saved, file_pth)
 
 
@@ -315,20 +354,41 @@ def load(
     """
     Load saved model from a series of checkpoint files.
 
-    Args:
-        file (Path):
-            location in which to safe checkpoints.
-        model (nn.module):
-            Model to save in checkpoint file. Model parameters are saved using
-            secure .safetensors format.
-        device (torch.device):
-            Device on which to load saved tensors.
+    Parameters
+    ----------
+    file : Path
+        Path to saved model parameters (.safetensors).
+    model : nn.module
+        Model in which to load parameters.
+    device : torch.device
+        Device on which to load saved tensors.
 
-    Returns:
-        model (nn.Module):
-            Model with loaded parameters on specified device.
-        extras (dict):
-            Additional values stored in companion .pth, mapped to device.
+    Returns
+    -------
+    model : nn.Module
+        Model with loaded parameters on specified device.
+    extras : dict[str: Any]
+        Additional values stored in companion .pth, mapped to device.
+
+    See Also
+    --------
+    cadlabutils.learning.funcs.save : Complementary save function.
+
+    Notes
+    -----
+    The structure of `extras` depends on the way in which `model` was initially
+    saved at `file`. If only model parameters were saved, `extras is an empty
+    dictionary. Otherwise, `extras` is a dictionary of `**kwargs` supplied when
+    model was initially saved.
+
+    Examples
+    --------
+    >> test_model = nn.Sequential(*[nn.Linear(10, 10) for _ in range(5)])
+    >> test_path = Path("~/Desktop/test_save")
+    >> test_model, test_extras = load(
+    ..     test_path, test_model, device=get_device(None))
+    >> test_extras
+    {'epoch': 10}
     """
     # load model parameters from safetensors format
     params = load_file(file.with_suffix(".safetensors"))
