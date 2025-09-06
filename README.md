@@ -12,7 +12,7 @@
 <!-- Badges -->
 <p>
   <a href="https://github.com/ikestar99/cadlabutils/graphs/contributors">
-    <img src="https://img.shields.io/github/contributors/ikestar99/cadlabutils" alt="contributors" />
+    <img src="https://img.shields.io/github/contributors/ikestar99/cadlabutils" alt="contributors"/>
   </a>
   <a href="">
     <img src="https://img.shields.io/github/last-commit/ikestar99/cadlabutils" alt="last update" />
@@ -128,6 +128,7 @@ cadlabutils includes a set of optional dependencies for:
 - `[arrays]`: array operations
 - `[files]`: specific file extensions
 - `[learning]`: deep learning with [`pytorch`](https://pytorch.org/)
+- `[dev]`: all auxiliary dependencies
 - See [`pyproject.toml`](https://github.com/ikestar99/cadlabutils/blob/main/pyproject.toml) for specific packages
 in each set of optional dependencies.
 
