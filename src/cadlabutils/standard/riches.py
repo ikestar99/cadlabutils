@@ -8,6 +8,33 @@ Created on Wed Jan 22 09:00:00 2025
 
 from rich.tree import Tree
 from rich.console import Console
+from rich.progress import track, ProgressBar
+
+
+def pbar(
+        item,
+        desc: str = "",
+        tabs: int = 0
+):
+    """Generate a colorful progress bar in the terminal.
+
+    Parameters
+    ----------
+    item : iterable
+        Iterable to wrap in progress bar.
+    desc : str, optional
+        Description of the progress bar.
+        Defaults to "".
+    tabs : int, optional
+        Number of tabs to offset left edge of progress bar.
+        Defaults to 0.
+
+    Returns
+    -------
+    ProgressBar
+        Instantiated progress bar.
+    """
+    return track(item, description=f"{" " * 4 * tabs}{desc}")
 
 
 def print_rich_tree(
@@ -15,8 +42,7 @@ def print_rich_tree(
         title: str = "tree",
         color: bool = True
 ):
-    """
-    Pretty-print a nested dictionary using rich's Tree with ├── and └──.
+    """Pretty-print a nested dictionary using rich's Tree with ├── and └──.
 
     Parameters
     ----------
