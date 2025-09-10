@@ -49,11 +49,22 @@
 
 </details>
 
+<details>
+<summary>Usage</summary>
+
 - [Usage](#usage)
-- [Contributing](#contributing)
+
+</details>
+
+<details>
+<summary>Additional Details</summary>
+
+- [Contributing](#contributors)
 - [License](#license)
 - [Contact](#contact)
 - [Acknowledgements](#acknowledgements)
+
+</details>
   
 
 [//]: # (<div align="center"> )
@@ -62,7 +73,7 @@
 
 
 <!-- Installation -->
-## Installation
+# Installation
 
 
 <!-- env prep -->
@@ -155,8 +166,8 @@ import cadlabutils.learning as cdu_l
 
 
 model = cdu_l.SNEMI3D(c_i=1, c_o=3)
-checkpoint_pth = Path("/Path/to/saved/weights.safetensors")
-model, _ = cdu_l.load(checkpoint_pth, model, device=cdu_l.get_device(None))
+save_file = Path("/Path/to/saved/weights.safetensors")
+model, _ = cdu_l.load(save_file, model, device=cdu_l.get_device(gpu=0))
 ```
 
 `cadlabutils.standard` contains utility functions using the standard library or required dependencies like
@@ -173,40 +184,38 @@ cdu.print_rich_tree(fruits, title="fruits")
 ```
 
 <!-- Usage -->
-## Usage
+# Usage
 
 TBD
 
 
-<!-- Contributing -->
-## Contributing
+<!-- Details -->
+# Additional Details
+
+<!-- Contributors -->
+### Contributors
 
 <a href="https://github.com/ikestar99/cadlabutils/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=ikestar99/cadlabutils" />
 </a>
 
-TBD
-
 
 <!-- License -->
-## License
+### License
 
 Distributed under the Apache License. See LICENSE.txt for more information.
 
 
 <!-- Contact -->
-## Contact
+### Contact
 
 Ike Ogbonna, MS (Ike.Ogbonna@ucsf.edu - ikestar99@hotmail.com)
 Cathryn Cadwell, MD, PhD (Cathryn.Cadwell@ucsf.edu)
 
 
 <!-- Acknowledgments -->
-## Acknowledgements
+### Acknowledgements
 
-logo art:
- - Edward Valenzuela, MS (edward.valenzuela@ucsf.edu)
-
-Templates/badges:
- - [Shields.io](https://shields.io/)
- - [awesome-readme-template](https://github.com/Louis3797/awesome-readme-template)
+ - logo art: Edward Valenzuela, MS (edward.valenzuela@ucsf.edu)
+ - badges: [Shields.io](https://shields.io/)
+ - readme template: [awesome-readme-template](https://github.com/Louis3797/awesome-readme-template)

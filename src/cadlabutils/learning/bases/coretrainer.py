@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from abc import ABC, abstractmethod
 from torch.optim import Adam
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -22,7 +23,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from ..utils import *
 
 
-class CoreTrainer:
+class CoreTrainer(ABC):
     """Helper class to facilitate inference with pytorch models.
 
     Class Attributes
@@ -68,6 +69,12 @@ class CoreTrainer:
 
     Other Parameters
     ----------------
+    model_dtype : torch.dtype, optional
+        Datatype of model.
+        Defaults to torch.float32, or single-precision.
+    target_dtype : torch.dtype, optional
+        Datatype of ground truth. Should match loss function.
+        Defaults to torch.int64.
     criterion_kwargs : dict, optional
         Keyword arguments passed to `criterion` init.
     optimizer_kwargs : dict, optional
@@ -76,6 +83,13 @@ class CoreTrainer:
     scheduler_kwargs : dict, optional
         Keyword arguments passed to `scheduler` init.
         Defaults to {"patience": 5, "threshold": 0.01}.
+
+    Notes
+    -----
+    `CoreTrainer` uses `torch.optim.lr_Scheduler.ReduceLROnPlateau` by default
+    during training. To disable this feature, set `scheduler_kwargs` to
+    {"patience": dummy_epochs} where `dummy_epochs` is an integer larger than
+    the number of epochs planned during training.
     """
     _MODE = ("train", "valid")
 
@@ -88,6 +102,8 @@ class CoreTrainer:
             optimizer: type = Adam,
             scheduler: type = ReduceLROnPlateau,
             gpu: int = 0,
+            model_dtype: torch.dtype = torch.float32,
+            target_dtype: torch.dtype = torch.int64,
             criterion_kwargs: dict = None,
             optimizer_kwargs: dict = None,
             scheduler_kwargs: dict = None,
@@ -108,94 +124,29 @@ class CoreTrainer:
 
         # set auxiliary training variables
         self.device = get_device(gpu)
+        self.dtypes = (model_dtype, target_dtype)
         self.out_dir = out_dir
 
-    # @classmethod
-    # def plot_stats(
-    #         cls,
-    #         file_csv: str,
-    #         epochs: int,
-    #         x_axis: str
-    # ):
-    #     """
-    #     Plot loss and accuracy metrics across training epochs.
-    #
-    #     Args:
-    #         file_csv (str):
-    #             Path to CSV file containing training statistics.
-    #         epochs (int):
-    #             Max number of training epochs.
-    #         x_axis (str):
-    #             Variable to plot on x-axis. Options are "epoch" (self._CE) or
-    #             "samples" (self._CS).
-    #     """
-    #     # load statistics
-    #     stats = pd.read_csv(file_csv, usecols=cls._ALL[:-1]).drop_duplicates()
-    #
-    #     # normalize loss to maximum value, pivot to long form
-    #     # stats[[cls._CL, cls._CLS]] /= stats[cls._CL].max()
-    #     stats = stats.melt(
-    #         id_vars=[cls._CN, cls._CS, cls._CE, cls._CM], var_name="stat",
-    #         value_vars=[cls._CL, cls._CA], value_name="normalized value")
-    #
-    #     # set style, colors, and create line plot
-    #     sns.set_theme(style="ticks", rc={
-    #         "axes.spines.right": False, "axes.spines.top": False})
-    #     g = sns.relplot(
-    #         data=stats, x=x_axis, y="normalized value", row="stat",
-    #         col=cls._CN, hue=cls._CM, errorbar=("se", 2), kind="line",
-    #         aspect=2, palette=sns.color_palette("rocket", n_colors=3))
-    #
-    #     # clean up and plot
-    #     x_min = 0 if x_axis == cls._CE else 1
-    #     x_max = epochs - 1 if x_axis == cls._CE else stats[cls._CS].max()
-    #     g.set(xlim=(x_min, x_max), ylim=(0, 1))
-    #     plt.show()
+    @abstractmethod
+    def _save_stats(
+            self,
+            *args,
+            **kwargs
+    ):
+        """compute statistics from current epoch."""
+        pass
 
-    # def _save_stats(
-    #         self,
-    #         epoch: int,
-    #         mode: str,
-    #         loss: list,
-    #         acc: list,
-    #         matrix: torch.tensor,
-    # ):
-    #     """
-    #     Save statistics from training, validation, or test phases of model
-    #     inference.
-    #
-    #     Args:
-    #         epoch (int):
-    #             Current epoch of training.
-    #         mode (str):
-    #             Current phase of training. Value in Predictor._MODE attribute.
-    #         loss (list):
-    #             Loss per batch.
-    #         acc (list):
-    #             Accuracy per batch.
-    #         matrix (torch.tensor):
-    #             Confusion matrix of class-wise prediction probabilities. Has
-    #             shape (true bases, predicted bases).
-    #     """
-    #     # convert confusion matrix to DataFrame on CPU
-    #     matrix = matrix.detach().cpu().numpy()
-    #     matrix /= np.linalg.norm(matrix, axis=1, keepdims=True)
-    #     cols = [f"class_{c}" for c in range(matrix.shape[0])]
-    #     matrix = pd.DataFrame(matrix, columns=cols)
-    #
-    #     # add running statistics and metadata to DataFrame
-    #     matrix = matrix.assign(**{
-    #         self._CN: self.model_name, self._CF: self.fold,
-    #         self._CS: self.samples, self._CE: epoch, self._CM: mode,
-    #         self._CL: np.mean(loss), self._CLS: 2 * ss.sem(loss),
-    #         self._CA: np.mean(acc), self._CAS: 2 * ss.sem(acc),
-    #         self._CGT: np.arange(matrix.shape[0])})
-    #
-    #     # append statistics to existing csv file, if it exists
-    #     check = self.statistics_csv.is_file()
-    #     matrix[self._ALL + cols].to_csv(
-    #         self.statistics_csv, header=not check, index=False,
-    #         mode="a" if check else "w")
+    def _step(
+            self,
+            sample: torch.tensor,
+            target: torch.tensor
+    ):
+        output, target, loss = forward_pass(
+            self.model, sample, device=self.device, target=target,
+            criterion=self.critr, optimizer=self.optim,
+            sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
+        return output, target, loss
+
 
     def _load_checkpoint(
             self
@@ -218,7 +169,7 @@ class CoreTrainer:
             dataset: Dataset,
             batch_size: int,
             epoch: int,
-            mode: str = None
+            train: bool
     ):
         """
         Test a trained model against an annotated test dataset.
@@ -245,19 +196,20 @@ class CoreTrainer:
                     Average accuracy across all test samples.
         """
         # test phase
-        self._evaluate_mode()
+        self.model = set_mode(
+            self.model, train=train, device=self.device, dtype=self.dtypes[0])
         t_loss, t_corr, t_count, t_matrix = 0, 0, 0, self.template.clone()
 
         # loop over dataset once
         t_loss, t_acc = [], []
         loader = self._get_loader(dataset, batch_size)
-        for sample, labels in loader:
+        for sample, target in loader:
             # forward pass
-            labels, output, loss = self._step(sample, labels)
+            target, output, loss = self._step(sample, target)
 
             # collect running test statistics
             acc, t_matrix = self._step_stats(
-                labels=labels, output=output, matrix=t_matrix)
+                labels=target, output=output, matrix=t_matrix)
             t_loss, t_acc = t_loss + [loss.item()], t_acc + [acc]
 
         self._save_stats(

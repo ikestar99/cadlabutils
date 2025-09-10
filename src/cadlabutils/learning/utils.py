@@ -283,7 +283,7 @@ def forward_pass(
         Datatype of input sample. Should match model datatype.
         Defaults to torch.float32, or single-precision.
     target_dtype : torch.dtype, optional
-        Datatype of input sample. Should match loss function.
+        Datatype of ground truth. Should match loss function.
         Defaults to torch.int64.
     """
     loss = None
