@@ -159,6 +159,18 @@ checkpoint_pth = Path("/Path/to/saved/weights.safetensors")
 model, _ = cdu_l.load(checkpoint_pth, model, device=cdu_l.get_device(None))
 ```
 
+`cadlabutils.standard` contains utility functions using the standard library or required dependencies like
+[`rich`](https://rich.readthedocs.io/en/stable/). Thus, these functions are all available under the main namespace.
+```python
+import cadlabutils as cdu
+
+
+fruits = {
+    "Apples": ("Fuji", "Envy", "Honeycrisp"),
+    "Citrus": {"Bitter": "Grapefruit", "Sweet": "Orange", "Sour": ("Lemon", "Lime")}
+}
+cdu.print_rich_tree(fruits, title="fruits")
+```
 
 <!-- Usage -->
 ## Usage
@@ -187,8 +199,6 @@ Distributed under the Apache License. See LICENSE.txt for more information.
 
 Ike Ogbonna, MS (Ike.Ogbonna@ucsf.edu - ikestar99@hotmail.com)
 Cathryn Cadwell, MD, PhD (Cathryn.Cadwell@ucsf.edu)
-
-Project Link: [https://github.com/Louis3797/awesome-readme-template](https://github.com/Louis3797/awesome-readme-template)
 
 
 <!-- Acknowledgments -->

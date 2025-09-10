@@ -6,5 +6,5 @@ Created on Wed Aug 06 09:00:00 2025
 """
 
 
-# from .trainer import Trainer
+from .coretrainer import CoreTrainer
 from .coredataset import CoreDataset

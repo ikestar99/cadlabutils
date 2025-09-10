@@ -92,3 +92,12 @@ def print_rich_tree(
     tree = Tree(f"[bold red1]{title}[/]")
     _add_dict_to_tree(data, tree)
     Console(force_terminal=color).print(tree)
+
+
+test = {
+    0: {
+        'name': 'NVIDIA RTX PRO 6000 Blackwell Workstation Edition',
+            'GiBs': 94.975830078125},
+    1: {'name': 'NVIDIA RTX A2000 12GB', 'GiBs': 94.975830078125}}
+
+print_rich_tree(test)

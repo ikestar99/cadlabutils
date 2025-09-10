@@ -7,6 +7,8 @@ Created on Tue Aug 12 09:00:00 2025
 
 
 from .bases import *
-from .funcs import *
-from .modules import *
 from .convnets import *
+
+from .utils import *
+from .metrics import *
+from .modules import *

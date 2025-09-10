@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from torch.utils.data import Dataset
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold
 
 
 class CoreDataset(Dataset):
@@ -92,7 +92,7 @@ class CoreDataset(Dataset):
 
     Generate k-fold split stratified by label metadata.
     >>> for i, (t, v) in enumerate(
-    ...         test_dataset.k_fold(3, meta_vars=["label"])):
+    ...         test_dataset.k_fold(3, stratify=["label"])):
     ...     print(f"fold {i}:")
     ...     t.meta  # doctest: +NORMALIZE_WHITESPACE
     ...     v.meta  # doctest: +NORMALIZE_WHITESPACE
@@ -103,35 +103,35 @@ class CoreDataset(Dataset):
     Mon head  2                4
               3                0
         tail  4                3
-              6                1
+              8                5
                      _data_index
     day label count
     Mon head  1                2
-        tail  8                5
+        tail  6                1
     ----------------------------
     fold 1:
                      _data_index
     day label count
     Mon head  1                2
               3                0
-        tail  6                1
-              8                5
+        tail  4                3
+              6                1
                      _data_index
     day label count
     Mon head  2                4
-        tail  4                3
+        tail  8                5
     ----------------------------
     fold 2:
                      _data_index
     day label count
     Mon head  1                2
               2                4
-        tail  4                3
+        tail  6                1
               8                5
                      _data_index
     day label count
     Mon head  3                0
-        tail  6                1
+        tail  4                3
     ----------------------------
     """
     _INDEX = "_data_index"
@@ -239,10 +239,29 @@ class CoreDataset(Dataset):
             Subset of dataset.
         """
         subset = CoreDataset(
-            self.meta[self.meta[self._INDEX].isin(sub_idx)],
+            self.meta[self.meta[self._INDEX].isin(sub_idx)].copy(),
             parent=self if self.parent is None else self.parent)
         return subset
 
+    def _splice(
+            self,
+            meta_vars: list[str, ...]
+    ):
+        """Concatenate metadata variables to identify unique combinations.
+
+        Parameters
+        ----------
+        meta_vars : list[str]
+            Metadata variables to concatenate.
+
+        Returns
+        -------
+        splice : np.ndarray
+            Contains `str` of spliced metadata values per datum.
+        """
+        splice = self.meta.index.to_frame(index=False)[meta_vars].astype(
+            str).agg("-".join, axis=1).to_numpy()
+        return splice
 
     def get_metadata(
             self,
@@ -293,7 +312,8 @@ class CoreDataset(Dataset):
     def k_fold(
             self,
             n_folds: int,
-            meta_vars: list[str] = None,
+            stratify: list[str, ...] = None,
+            grouping: list[str, ...] = None,
             shuffle: bool = True,
             random_state: int = 42
     ):
@@ -303,9 +323,12 @@ class CoreDataset(Dataset):
         ----------
         n_folds : int
             Number of folds to generate.
-        meta_vars : list[str], optional
+        stratify : list[str], optional
             Metadata variables against which to stratify splits.
             Defaults to None, in which case data are not stratified.
+        grouping : list[str], optional
+            Metadata variables against which to group splits.
+            Defaults to None, in which case data are not grouped.
         shuffle : bool, optional
             Whether to shuffle before splitting.
             Defaults to True.
@@ -325,14 +348,27 @@ class CoreDataset(Dataset):
         ValueError
             Insufficient data diversity to split unique groups in `meta_vars`
             into `n_folds` folds.
-        """
-        sub_meta = self.meta.copy()
 
-        # create composite metadata variable for stratification
-        stratify = (
-            np.ones(len(self)) if meta_vars is None else
-            sub_meta.index.to_frame(index=False)[meta_vars].astype(str).agg(
-                "-".join, axis=1).to_numpy())
+        Notes
+        -----
+        `stratify` and `grouping` metadata variables serve different purposes.
+        -   With `stratify`, each unique combination of variables appears in
+            both training and validation subsets in roughly equal proportion,
+            yielding a split wherein data heterogeneity is preserved.
+        -   With `grouping`, each unique combination of variables (a "group")
+            appears only in one subset, ex. in the training but not validation
+            split. As a consequence, each group serves in exactly one
+            validation set across all folds.
+
+        Thus, `stratify` is used to ensure that the validation split resembles
+        the training split, while `grouping` is used to evaluate if a given
+        model generalizes to data excluded from training.
+        """
+        # create composite metadata variable for stratification and grouping
+        strat = np.ones(len(self)) if stratify is None else self._splice(
+            stratify)
+        group = np.arange(len(self)) if grouping is None else self._splice(
+            grouping)
 
         # verify adequate data per strata for desired number of groups
         _, counts = np.unique(stratify, return_counts=True)
@@ -343,9 +379,9 @@ class CoreDataset(Dataset):
                 + f"of within-strata tallies of {counts}")
 
         # generate stratified splits
-        kf = StratifiedKFold(
+        kf = StratifiedGroupKFold(
             n_splits=n_folds, shuffle=shuffle, random_state=random_state)
-        for tdx, vdx in kf.split(np.zeros(len(self)), stratify):
+        for tdx, vdx in kf.split(np.zeros(len(self)), strat, group):
             t_set = self._subset(self.meta.iloc[tdx][self._INDEX].to_numpy())
             v_set = self._subset(self.meta.iloc[vdx][self._INDEX].to_numpy())
             yield t_set, v_set
