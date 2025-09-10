@@ -93,46 +93,50 @@ class CoreDataset(Dataset):
     Generate k-fold split stratified by label metadata.
     >>> for i, (t, v) in enumerate(
     ...         test_dataset.k_fold(3, stratify=["label"])):
-    ...     print(f"fold {i}:")
+    ...     print(f"fold {i} train:")
     ...     t.meta  # doctest: +NORMALIZE_WHITESPACE
+    ...     print(f"fold {i} valid:")
     ...     v.meta  # doctest: +NORMALIZE_WHITESPACE
-    ...     print("-" * 28)
-    fold 0:
+    ...     print("- " * 14)
+    fold 0 train:
                      _data_index
     day label count
     Mon head  2                4
               3                0
         tail  4                3
               8                5
+    fold 0 valid:
                      _data_index
     day label count
     Mon head  1                2
         tail  6                1
-    ----------------------------
-    fold 1:
+    - - - - - - - - - - - - - -
+    fold 1 train:
                      _data_index
     day label count
     Mon head  1                2
               3                0
         tail  4                3
               6                1
+    fold 1 valid:
                      _data_index
     day label count
     Mon head  2                4
         tail  8                5
-    ----------------------------
-    fold 2:
+    - - - - - - - - - - - - - -
+    fold 2 train:
                      _data_index
     day label count
     Mon head  1                2
               2                4
         tail  6                1
               8                5
+    fold 2 valid:
                      _data_index
     day label count
     Mon head  3                0
         tail  4                3
-    ----------------------------
+    - - - - - - - - - - - - - -
     """
     _INDEX = "_data_index"
 

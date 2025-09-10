@@ -19,7 +19,6 @@ from torch.optim import Adam
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-
 from ..utils import *
 
 
@@ -43,95 +42,73 @@ class CoreTrainer:
         Scheduler with which to reduce learning rate over time.
     device : torch.device
         Hardware device used for inference.
-    save_safetensors : pathlib.Path
-        Path to save model checkpoints (safetensors).
+    out_dir : pathlib.Path
+        Directory in which to save model-related information.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Model class.
+    model_kwargs : dict
+        Keyword arguments passed to `model` init.
+    out_dir : pathlib.Path
+        Directory in which to save training related files.
+    criterion : type, optional
+        Loss function class.
+        Defaults to torch.nn.CrossEntropyLoss.
+    optimizer : type, optional
+        Optimizer class.
+        Defaults to torch.optim.Adam.
+    scheduler : type, optional
+        Learning rate scheduler class.
+        Defaults to torch.nn.CrossEntropyLoss.
+    gpu : int, optional
+        CUDA device to use for inference.
+        Defaults to 0.
+
+    Other Parameters
+    ----------------
+    criterion_kwargs : dict, optional
+        Keyword arguments passed to `criterion` init.
+    optimizer_kwargs : dict, optional
+        Keyword arguments passed to `optimizer` init.
+        Defaults to {"lr": 1e-3"}.
+    scheduler_kwargs : dict, optional
+        Keyword arguments passed to `scheduler` init.
+        Defaults to {"patience": 5, "threshold": 0.01}.
     """
     _MODE = ("train", "valid")
 
     def __init__(
             self,
             model: nn.Module,
-            name: str,
+            model_kwargs: dict,
+            out_dir: Path,
             criterion: type = nn.CrossEntropyLoss,
             optimizer: type = Adam,
             scheduler: type = ReduceLROnPlateau,
+            gpu: int = 0,
             criterion_kwargs: dict = None,
             optimizer_kwargs: dict = None,
             scheduler_kwargs: dict = None,
-            gpu: int = 0,
-            lr: float = 1e-3,
-            schedule: bool = True,
     ):
-        """
-        Instantiate Predictor with known model.
-
-        Args:
-            model (torch.nn.Module):
-                Instantiated model to use for inference.
-            name (str):
-                Used to identify model in output files.
-            criterion (type, optional):
-                Loss function to use for inference.
-                Defaults to torch.nn.CrossEntropyLoss.
-            optimizer (type, optional):
-                Optimizer to use for inference.
-                Defaults to torch.optim.Adam.
-            cr_kwargs (dict, optional):
-                Keyword arguments to pass to criterion.__init__ function call.
-                Defaults to None, in which case no keyword arguments are
-                passed.
-            op_kwargs (dict, optional):
-                Keyword arguments to pass to optimizer.__init__ function call.
-                Defaults to None, in which case no keyword arguments are
-                passed.
-            schedule (bool, optional):
-                If True, use a scheduler to lower learning rate when loss
-                plateaus.
-                Defaults to True.
-            gpu (int, optional):
-                CUDA device to use for inference.
-                Defaults to 0.
-            lr (float, optional):
-                Initial learning rate for optimizer.
-                Defaults to 1e-3.
-        """
-        # identify hardware device on which to run inference
-        self.device = get_device(gpu)
-
-        # instantiate training components with associated arguments
-        self.model = model.double().to(self.device)
+        # instantiate model and loss function
+        self.model = model(*model_kwargs)
         self.critr = criterion(**(criterion_kwargs or {}))
 
+        # instantiate optimizer
         o_kwargs = {"params": self.model.parameters(), "lr": 1e-3}
         o_kwargs.update(optimizer_kwargs or {})
         self.optim = optimizer(**o_kwargs)
 
-        s_kwargs = {
-            "optimizer": self.optim, "mode": "min", "factor": 0.1,
-            "patience": 5, "threshold": 0.01}
+        # instantiate learning rate scheduler
+        s_kwargs = {"optimizer": self.optim, "patience": 5, "threshold": 0.01}
         s_kwargs.update(scheduler_kwargs or {})
-        self.sched = ReduceLROnPlateau(**s_kwargs)
+        self.sched = scheduler(**s_kwargs)
 
-        # # generate output data paths
-        self.save_safetensors = aam.MODEL_DIR.joinpath(f"{name}.pth")
-        self.statistics_csv = aam.STATISTIC_DIR.joinpath(
-            f"{name}_statistics.csv")
-
-    def __getattr__(
-            self,
-            name: str
-    ):
-        if name == "model_name":
-            return self.model.__class__.__name__
-        elif name == "statistics":
-            attribute = pd.read_csv(self.statistics_csv)
-        elif name == "peak":
-            check = self.statistics_csv.is_file()
-            attribute = self.statistics[self._CA].max() if check else 0
-        else:
-            raise AttributeError(f"Trainer has no attribute named {name}")
-
-        return attribute
+        # set auxiliary training variables
+        self.device = get_device(gpu)
+        self.out_dir = out_dir
 
     # @classmethod
     # def plot_stats(
@@ -175,50 +152,50 @@ class CoreTrainer:
     #     g.set(xlim=(x_min, x_max), ylim=(0, 1))
     #     plt.show()
 
-    def _save_stats(
-            self,
-            epoch: int,
-            mode: str,
-            loss: list,
-            acc: list,
-            matrix: torch.tensor,
-    ):
-        """
-        Save statistics from training, validation, or test phases of model
-        inference.
-
-        Args:
-            epoch (int):
-                Current epoch of training.
-            mode (str):
-                Current phase of training. Value in Predictor._MODE attribute.
-            loss (list):
-                Loss per batch.
-            acc (list):
-                Accuracy per batch.
-            matrix (torch.tensor):
-                Confusion matrix of class-wise prediction probabilities. Has
-                shape (true bases, predicted bases).
-        """
-        # convert confusion matrix to DataFrame on CPU
-        matrix = matrix.detach().cpu().numpy()
-        matrix /= np.linalg.norm(matrix, axis=1, keepdims=True)
-        cols = [f"class_{c}" for c in range(matrix.shape[0])]
-        matrix = pd.DataFrame(matrix, columns=cols)
-
-        # add running statistics and metadata to DataFrame
-        matrix = matrix.assign(**{
-            self._CN: self.model_name, self._CF: self.fold,
-            self._CS: self.samples, self._CE: epoch, self._CM: mode,
-            self._CL: np.mean(loss), self._CLS: 2 * ss.sem(loss),
-            self._CA: np.mean(acc), self._CAS: 2 * ss.sem(acc),
-            self._CGT: np.arange(matrix.shape[0])})
-
-        # append statistics to existing csv file, if it exists
-        check = self.statistics_csv.is_file()
-        matrix[self._ALL + cols].to_csv(
-            self.statistics_csv, header=not check, index=False,
-            mode="a" if check else "w")
+    # def _save_stats(
+    #         self,
+    #         epoch: int,
+    #         mode: str,
+    #         loss: list,
+    #         acc: list,
+    #         matrix: torch.tensor,
+    # ):
+    #     """
+    #     Save statistics from training, validation, or test phases of model
+    #     inference.
+    #
+    #     Args:
+    #         epoch (int):
+    #             Current epoch of training.
+    #         mode (str):
+    #             Current phase of training. Value in Predictor._MODE attribute.
+    #         loss (list):
+    #             Loss per batch.
+    #         acc (list):
+    #             Accuracy per batch.
+    #         matrix (torch.tensor):
+    #             Confusion matrix of class-wise prediction probabilities. Has
+    #             shape (true bases, predicted bases).
+    #     """
+    #     # convert confusion matrix to DataFrame on CPU
+    #     matrix = matrix.detach().cpu().numpy()
+    #     matrix /= np.linalg.norm(matrix, axis=1, keepdims=True)
+    #     cols = [f"class_{c}" for c in range(matrix.shape[0])]
+    #     matrix = pd.DataFrame(matrix, columns=cols)
+    #
+    #     # add running statistics and metadata to DataFrame
+    #     matrix = matrix.assign(**{
+    #         self._CN: self.model_name, self._CF: self.fold,
+    #         self._CS: self.samples, self._CE: epoch, self._CM: mode,
+    #         self._CL: np.mean(loss), self._CLS: 2 * ss.sem(loss),
+    #         self._CA: np.mean(acc), self._CAS: 2 * ss.sem(acc),
+    #         self._CGT: np.arange(matrix.shape[0])})
+    #
+    #     # append statistics to existing csv file, if it exists
+    #     check = self.statistics_csv.is_file()
+    #     matrix[self._ALL + cols].to_csv(
+    #         self.statistics_csv, header=not check, index=False,
+    #         mode="a" if check else "w")
 
     def _load_checkpoint(
             self
