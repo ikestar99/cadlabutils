@@ -16,11 +16,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from torch.optim import Adam
 from torch.utils.data import Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from ..utils import *
+from .. import utils
 
 
 class CoreTrainer(ABC):
@@ -35,11 +36,11 @@ class CoreTrainer(ABC):
     ----------
     model : torch.nn.Module
         Model to train and use for inference.
-    critr : torch.nn.loss._Loss
+    criterion : torch.nn.loss._Loss
         Loss function with which to evaluate model performance.
-    optim : torch.optim.Optimizer
+    optimizer : torch.optim.Optimizer
         Optimizer with which to train the model.
-    sched : torch.optim.lr_scheduler._LRScheduler
+    scheduler : torch.optim.lr_scheduler._LRScheduler
         Scheduler with which to reduce learning rate over time.
     device : torch.device
         Hardware device used for inference.
@@ -110,28 +111,28 @@ class CoreTrainer(ABC):
     ):
         # instantiate model and loss function
         self.model = model(*model_kwargs)
-        self.critr = criterion(**(criterion_kwargs or {}))
+        self.criterion = criterion(**(criterion_kwargs or {}))
 
         # instantiate optimizer
         o_kwargs = {"params": self.model.parameters(), "lr": 1e-3}
         o_kwargs.update(optimizer_kwargs or {})
-        self.optim = optimizer(**o_kwargs)
+        self.optimizer = optimizer(**o_kwargs)
 
         # instantiate learning rate scheduler
-        s_kwargs = {"optimizer": self.optim, "patience": 5, "threshold": 0.01}
+        s_kwargs = {
+            "optimizer": self.optimizer, "patience": 5, "threshold": 0.01}
         s_kwargs.update(scheduler_kwargs or {})
-        self.sched = scheduler(**s_kwargs)
+        self.scheduler = scheduler(**s_kwargs)
 
         # set auxiliary training variables
-        self.device = get_device(gpu)
+        self.device = utils.get_device(gpu)
         self.dtypes = (model_dtype, target_dtype)
-        self.out_dir = out_dir
+        self.model_path = out_dir.joinpath("model.safetensors")
+        self.config_json = out_dir.joinpath("config.json")
 
     @abstractmethod
-    def _save_stats(
-            self,
-            *args,
-            **kwargs
+    def _statistics(
+            self
     ):
         """compute statistics from current epoch."""
         pass
@@ -141,28 +142,38 @@ class CoreTrainer(ABC):
             sample: torch.tensor,
             target: torch.tensor
     ):
-        output, target, loss = forward_pass(
+        """Forward pass through model, prepare for backpropagation.
+
+        Parameters
+        ----------
+        sample : torch.tensor
+            Input data on which to run inference.
+        target : torch.tensor, optional
+            Corresponding ground truth labels.
+
+        Returns
+        -------
+        output : torch.tensor
+            Output of forward pass through model.
+        loss : torch.tensor
+            Output of criterion.
+
+        Notes
+        -----
+        Simple wrapper around `utils.forward_pass` utility function. For more
+        complex training paradigms, subclasses should override this method with
+        custom logic to account for different input and output structures.
+        Function should retain two outputs, the latter of which must be a
+        scalar tensor with numerical loss value.
+
+        Any such custom function must define both backpropagation
+        (`loss.backward()') and optimization (`optim.step()`) steps.
+        """
+        output, loss = utils.forward_pass(
             self.model, sample, device=self.device, target=target,
-            criterion=self.critr, optimizer=self.optim,
+            criterion=self.criterion, optimizer=self.optimizer,
             sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-        return output, target, loss
-
-
-    def _load_checkpoint(
-            self
-    ):
-        """
-        Load model parameters from a checkpoint.pth file.
-        """
-        states = torch.load(
-            self.save_safetensors, map_location=self.device)[self.model_name]
-        self.model.load_state_dict(states["model"])
-        if "optimizer" in states and self.optim is not None:
-            self.optim.load_state_dict(states["optimizer"])
-        if "scheduler" in states and self.sched is not None:
-            self.sched.load_state_dict(states["scheduler"])
-
-        return states["epoch"]
+        return output, loss
 
     def test(
             self,
@@ -183,9 +194,6 @@ class CoreTrainer(ABC):
                 training, model parameters are updates once per batch.
             epoch (int):
                 Number of training epochs completed before test phase.
-            mode (str):
-                Mode of test phase.
-                Defaults to None, in which case mode is Predictor._MODE[-1].
 
         Returns:
             (tuple):
@@ -196,7 +204,7 @@ class CoreTrainer(ABC):
                     Average accuracy across all test samples.
         """
         # test phase
-        self.model = set_mode(
+        self.model = utils.set_mode(
             self.model, train=train, device=self.device, dtype=self.dtypes[0])
         t_loss, t_corr, t_count, t_matrix = 0, 0, 0, self.template.clone()
 
@@ -246,44 +254,50 @@ class CoreTrainer(ABC):
                 If True, resume training from saved checkpoint.
                 Defaults to False.
         """
+        E, O, S = "epoch", "optimizer", "scheduler"
         # load model-specific checkpoint if it exists and resume training
+        epoch = 0
+        if resume:
+            self.model, extras = utils.load(
+                self.model_path, self.model, device=self.device,
+                load_dict={O: self.optimizer, S: self.scheduler})
+
+            epoch
         check = resume and self.save_safetensors.is_file()
         e = self._load_checkpoint() + 1 if check else 0
         my_peak = 0
         train_loader = self._get_loader(train_dataset, batch_size)
-        # for e in aau.pbar(range(e, epochs), "epoch"):
-        #     t_loss, t_acc, t_matrix = [], [], self.template.clone()
-        #
-        #     # training phase
-        #     self._learning_mode()
-        #     for sample, labels in train_loader:
-        #         # forward pass
-        #         self.optim.zero_grad()
-        #         labels, output, loss = self._step(sample, labels)
-        #
-        #         # back propagation
-        #         loss.backward()
-        #         nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1)
-        #         self.optim.step()
-        #
-        #         # collect running statistics
-        #         acc, t_matrix = self._step_stats(
-        #             labels=labels, output=output, matrix=t_matrix)
-        #         t_loss, t_acc = t_loss + [loss.item()], t_acc + [acc]
-        #
-        #     # save train statistics
-        #     self._save_stats(
-        #         e, mode=self._MODE[0], loss=t_loss, acc=t_acc, matrix=t_matrix)
-        #
-        #     # validation phase
-        #     v_loss, v_acc = self.test(
-        #         dataset=valid_dataset, batch_size=batch_size, epoch=e,
-        #         mode=self._MODE[1])
-        #
-        #     # modify learning rate based on validation loss, clean up
-        #     self.sched.step(v_loss)
-        #     if v_acc > my_peak:
-        #         my_peak = max(v_acc, my_peak)
-        #         self._save_checkpoint(e)
-        #
-        # print(f"peak validation/peak total: {my_peak:.2f} / {self.peak:.2f}")
+        for e in aau.pbar(range(e, epochs), "epoch"):
+            t_loss, t_acc, t_matrix = [], [], self.template.clone()
+
+            # training phase
+            self._learning_mode()
+            for sample, labels in train_loader:
+                # forward pass
+                output, loss = self._step(sample, labels)
+
+                # collect running statistics
+                acc, t_matrix = self._step_stats(
+                    labels=labels, output=output, matrix=t_matrix)
+                t_loss, t_acc = t_loss + [loss.item()], t_acc + [acc]
+
+            # save train statistics
+            self._save_stats(
+                e, mode=self._MODE[0], loss=t_loss, acc=t_acc, matrix=t_matrix)
+
+            # validation phase
+            v_loss, v_acc = self.test(
+                dataset=valid_dataset, batch_size=batch_size, epoch=e,
+                mode=self._MODE[1])
+
+            # modify learning rate based on validation loss, clean up
+            self.sched.step(v_loss)
+            if v_acc <= my_peak:
+                continue
+
+            my_peak = max(v_acc, my_peak)
+            utils.save(
+                self.model_path, self.model,
+                save_dict={O: self.optimizer, S: self.scheduler}, E=e)
+
+        print(f"peak validation/peak total: {my_peak:.2f} / {self.peak:.2f}")

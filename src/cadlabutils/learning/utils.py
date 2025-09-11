@@ -106,6 +106,7 @@ def get_loader(
 def save(
         file: Path,
         model: nn.Module,
+        save_dict: dict[str, object],
         **kwargs
 ):
     """Save model parameters as series of checkpoint files.
@@ -113,23 +114,28 @@ def save(
     Parameters
     ----------
     file : Path
-        location in which to safe checkpoints.
+        location in which to save checkpoints.
     model : nn.module
         Model to save in checkpoint file.
+    save_dict : dict[str, object]
+        key : str
+            Key of state dict to save in companion .pth file.
+        value : object
+            Object to save state via `state_dict` method.
     **kwargs
         Keyword arguments. Additional items are saved in a tandem .pth file.
 
     See Also
     --------
-    cadlabutils.learning.funcs.load : Complementary load function.
+    load : Complementary load function.
 
     Notes
     -----
     Saving a model yields at least one file, a .safetensors file that stores
     model parameters in a secure pickle-independent format. Any additional
     values are saved as a dictionary in a pytorch .pth file. If this secondary
-    file already exists, key: value pairs will be overwritten if that match
-    keys specified in `kwargs`. Remaining key: value pairs are preserved.
+    file already exists, key: value pairs will be overwritten if they match
+    keys specified in `save_dict` or `kwargs`.
 
     Examples
     --------
@@ -142,17 +148,19 @@ def save(
     save_file(model.state_dict(), file.with_suffix(".safetensors"))
 
     # save auxiliary values
-    if len(kwargs) > 0:
+    if len(save_dict) + len(kwargs) > 0:
         file_pth = file.with_suffix(".pth")
         saved = torch.load(file_pth) if file_pth.is_file() else {}
         saved.update(kwargs)
+        saved.update({k: v.state_dict() for k, v in save_dict.items()})
         torch.save(saved, file_pth)
 
 
 def load(
         file: Path,
         model: nn.Module,
-        device: torch.device
+        device: torch.device,
+        load_dict: dict[str, object]
 ):
     """
     Load saved model from a series of checkpoint files.
@@ -165,31 +173,37 @@ def load(
         Model in which to load parameters.
     device : torch.device
         Device on which to load saved tensors.
+    load_dict : dict[str, object]
+        key : str
+            Key of state dict stored in companion .pth file.
+        value : object
+            Object to update in place using `load_state_dict` method.
 
     Returns
     -------
-    model : nn.Module
-        Model with loaded parameters on specified device.
     extras : dict[str: Any]
         Additional values stored in companion .pth, mapped to device.
 
     See Also
     --------
-    cadlabutils.learning.funcs.save : Complementary save function.
+    save : Complementary save function.
 
     Notes
     -----
+    For keys specified in `load_dict`, the corresponding value will be updated
     The structure of `extras` depends on the way in which `model` was initially
     saved at `file`. If only model parameters were saved, `extras is an empty
     dictionary. Otherwise, `extras` is a dictionary of `**kwargs` supplied when
-    model was initially saved.
+    model was initially saved, excluding keys in `load_dict`.
+
+    For keys in `load_dict`, the corresponding value will be updated with a
+    state dict at the same key in saved companion file.
 
     Examples
     --------
     >> test_model = nn.Sequential(*[nn.Linear(10, 10) for _ in range(5)])
     >> test_path = Path("~/Desktop/test_save")
-    >> test_model, test_extras = load(
-    ..     test_path, test_model, device=get_device(None))
+    >> test_extras = load(test_path, test_model, device=get_device(None))
     >> test_extras
     {'epoch': 10}
     """
@@ -201,7 +215,14 @@ def load(
     file_pth = file.with_suffix(".pth")
     extras = {} if not file_pth.is_file() else torch.load(
         file_pth, map_location=device)
-    return model, extras
+
+    # load state dicts
+    for k in set(load_dict.keys()).intersection(extras.keys()):
+        load_dict[k].load_state_dict(extras[k])
+
+    # isolate remaining values
+    extras = {k: v for k, v in extras.items() if k not in load_dict}
+    return extras
 
 
 def set_mode(
@@ -271,9 +292,6 @@ def forward_pass(
     -------
     output : torch.tensor
         Output of forward pass through model.
-    target : torch.tensor | None
-        Ground truth labels transferred to inference device. None if loss not
-        computed.
     loss : torch.tensor | None
         Output of criterion. None if loss is not computed.
 
@@ -285,6 +303,12 @@ def forward_pass(
     target_dtype : torch.dtype, optional
         Datatype of ground truth. Should match loss function.
         Defaults to torch.int64.
+
+    Notes
+    -----
+    Simple forward pass. Requires `sample` and `target` to be ``torch.tensor``
+    where `model(sample)` and `criterion(model(sample), target)` are both
+    syntactically valid.
     """
     loss = None
     if None not in (target, criterion, optimizer):
@@ -303,4 +327,4 @@ def forward_pass(
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
             optimizer.step()
 
-    return output, target, loss
+    return output, loss
