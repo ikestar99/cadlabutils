@@ -316,7 +316,7 @@ class CoreTrainer(ABC):
             self.model, extras = utils.load(
                 self.model_path, self.model, device=self.device,
                 load_dict={op: self.optimizer, sc: self.scheduler})
-            epoch += extras[E] + 1
+            epoch += extras[ep] + 1
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, batch_size)
