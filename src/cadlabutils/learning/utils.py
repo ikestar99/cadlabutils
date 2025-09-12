@@ -70,7 +70,7 @@ def get_device_names(
     return device_info
 
 
-def get_loader(
+def get_dataloader(
         dataset: Dataset,
         batch_size: int,
         shuffle: bool = True,
@@ -96,10 +96,18 @@ def get_loader(
     -------
     loader : DataLoader
         Instantiated DataLoader.
+
+    Notes
+    -----
+    If `dataset` is not divisible into equal batches of `batch_size` samples,
+    The final non-`batch_size` batch will be discarded if it includes a single
+    sample and `batch_size` > 1.
     """
+    remainder = len(dataset) % batch_size
+    drop = True if (remainder == 1) and (batch_size != 1) else False
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle, num_workers=workers,
-        pin_memory=True, persistent_workers=True, **kwargs)
+        pin_memory=True, persistent_workers=True, drop_last=drop, **kwargs)
     return loader
 
 

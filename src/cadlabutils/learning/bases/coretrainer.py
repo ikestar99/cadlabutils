@@ -7,19 +7,13 @@ Created on Wed Jan 22 09:00:00 2025
 
 
 import numpy as np
-import pandas as pd
-import seaborn as sns
-import scipy.stats as ss
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from torch.optim import Adam
-from torch.utils.data import Dataset
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+import cadlabutils as cdu
 
 from .. import utils
 
@@ -44,8 +38,12 @@ class CoreTrainer(ABC):
         Scheduler with which to reduce learning rate over time.
     device : torch.device
         Hardware device used for inference.
-    out_dir : pathlib.Path
-        Directory in which to save model-related information.
+    dtypes : tuple[torch.dtype, torch.dtype]
+        Data typed of model and ground truth data.
+    model_path : Path
+        Path where model parameters are stored.
+    config_json : Path
+        Path where training hyperparameters are stored.
 
     Parameters
     ----------
@@ -63,7 +61,7 @@ class CoreTrainer(ABC):
         Defaults to torch.optim.Adam.
     scheduler : type, optional
         Learning rate scheduler class.
-        Defaults to torch.nn.CrossEntropyLoss.
+        Defaults to nn.CrossEntropyLoss.
     gpu : int, optional
         CUDA device to use for inference.
         Defaults to 0.
@@ -85,6 +83,11 @@ class CoreTrainer(ABC):
         Keyword arguments passed to `scheduler` init.
         Defaults to {"patience": 5, "threshold": 0.01}.
 
+    See Also
+    --------
+    CoreTrainer._stats : abstract method, must be implemented by child class.
+    CoreTrainer._reset : abstract method, must be implemented by child class.
+
     Notes
     -----
     `CoreTrainer` uses `torch.optim.lr_Scheduler.ReduceLROnPlateau` by default
@@ -92,7 +95,6 @@ class CoreTrainer(ABC):
     {"patience": dummy_epochs} where `dummy_epochs` is an integer larger than
     the number of epochs planned during training.
     """
-    _MODE = ("train", "valid")
 
     def __init__(
             self,
@@ -100,8 +102,8 @@ class CoreTrainer(ABC):
             model_kwargs: dict,
             out_dir: Path,
             criterion: type = nn.CrossEntropyLoss,
-            optimizer: type = Adam,
-            scheduler: type = ReduceLROnPlateau,
+            optimizer: type = torch.optim.Adam,
+            scheduler: type = torch.optim.lr_scheduler.ReduceLROnPlateau,
             gpu: int = 0,
             model_dtype: torch.dtype = torch.float32,
             target_dtype: torch.dtype = torch.int64,
@@ -131,16 +133,65 @@ class CoreTrainer(ABC):
         self.config_json = out_dir.joinpath("config.json")
 
     @abstractmethod
-    def _statistics(
-            self
+    def _stats(
+            self,
+            output,
+            target
     ):
-        """compute statistics from current epoch."""
+        """Compute summary statistics from current pass.
+
+        Parameters
+        ----------
+        output
+            Direct output of forward pass through `self.model`.
+        target
+            Ground truth target for comparison.
+
+        Returns
+        -------
+        float
+            Accuracy of current prediction. Should be normalized to [0, 1]
+            interval where 0 is worst possible performance and 1 is best.
+
+        Notes
+        -----
+        Can also be used to generate per-epoch running statistics, such as a
+        confusion matrix, with instance variables defined in `__init__`.
+        """
+        pass
+
+    @abstractmethod
+    def _reset(
+            self,
+            epoch: int,
+            mode: str,
+            loss: float,
+            accuracy: float
+    ):
+        """Reset instance state after completing an epoch.
+
+        Parameters
+        ----------
+        epoch : int
+            Current epoch number.
+        mode : str
+            Type of current epoch. Native options are "train", "valid".
+        loss : float
+            Aggregated loss value for current epoch.
+        accuracy : float
+            Aggregated accuracy value for current epoch.
+
+        Notes
+        -----
+
+        """
         pass
 
     def _step(
             self,
             sample: torch.tensor,
-            target: torch.tensor
+            target: torch.tensor,
+            train: bool
     ):
         """Forward pass through model, prepare for backpropagation.
 
@@ -150,6 +201,9 @@ class CoreTrainer(ABC):
             Input data on which to run inference.
         target : torch.tensor, optional
             Corresponding ground truth labels.
+        train : bool
+            If True, prepare model for training. If False, prepare model for
+            validation.
 
         Returns
         -------
@@ -162,73 +216,76 @@ class CoreTrainer(ABC):
         -----
         Simple wrapper around `utils.forward_pass` utility function. For more
         complex training paradigms, subclasses should override this method with
-        custom logic to account for different input and output structures.
-        Function should retain two outputs, the latter of which must be a
-        scalar tensor with numerical loss value.
+        custom logic to account for different input and output structures. Any
+        such function must:
+        -   Accept 3 input arguments, `sample`, `target`, and `train`.
+            The former two do not need to be tensors. The last, `train`, is a
+            ``bool`` that set model to train mode for training and eval mode
+            for validation.
+        -   Return 2 output values. The first should be some output of forward
+            pass through the model that can be compared to a ground truth for
+            downstream accuracy measurement in `_statistics` method. The second
+            must be a scalar loss tensor.
 
         Any such custom function must define both backpropagation
         (`loss.backward()') and optimization (`optim.step()`) steps.
         """
         output, loss = utils.forward_pass(
             self.model, sample, device=self.device, target=target,
-            criterion=self.criterion, optimizer=self.optimizer,
+            criterion=self.criterion,
+            optimizer=self.optimizer if train else None,
             sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
         return output, loss
 
-    def test(
+    def _epoch(
             self,
-            dataset: Dataset,
-            batch_size: int,
-            epoch: int,
-            train: bool
+            loader: torch.utils.data.DataLoader,
+            train: bool,
+            epoch: int
     ):
-        """
-        Test a trained model against an annotated test dataset.
+        """Complete a full iteration through dataset with model.
 
-        Args:
-            dataset (Dataset):
-                Annotated dataset on which to validate trained model after last
-                epoch.
-            batch_size (int):
-                Number of samples to include in each forward pass. During
-                training, model parameters are updates once per batch.
-            epoch (int):
-                Number of training epochs completed before test phase.
+        Parameters
+        ----------
+        loader : torch.utils.data.DataLoader
+            Annotated dataset wrapped in a loader.
+        batch_size : int
+            Number of samples to include in each forward pass. During
+            training, model parameters are updates once per batch.
+        train : bool
+            If True, prepare model for training. If False, prepare model for
+            validation.
+        epoch : int
+            Current epoch number.
 
-        Returns:
-            (tuple):
-            Contains the following two items:
-            -    t_loss (float):
-                    Average loss across all test samples.
-            -   t_acc (float):
-                    Average accuracy across all test samples.
+        Returns
+        -------
+        running_stats : np.ndarray
+            Structure is (average_loss, average_accuracy) aggregated across all
+            batches in `dataset`.
         """
-        # test phase
+        # prepare for training or inference
         self.model = utils.set_mode(
             self.model, train=train, device=self.device, dtype=self.dtypes[0])
-        t_loss, t_corr, t_count, t_matrix = 0, 0, 0, self.template.clone()
 
         # loop over dataset once
-        t_loss, t_acc = [], []
-        loader = self._get_loader(dataset, batch_size)
+        running_stats = []
         for sample, target in loader:
-            # forward pass
-            target, output, loss = self._step(sample, target)
+            # forward pass, backpropagation, optimization, and statistics
+            output, loss = self._step(sample, target, train=train)
+            running_stats += [[loss.item(), self._stats(output, target)]]
 
-            # collect running test statistics
-            acc, t_matrix = self._step_stats(
-                labels=target, output=output, matrix=t_matrix)
-            t_loss, t_acc = t_loss + [loss.item()], t_acc + [acc]
-
-        self._save_stats(
-            epoch, mode=self._MODE[-1] if mode is None else mode, loss=t_loss,
-            acc=t_acc, matrix=t_matrix)
-        return np.mean(t_loss), np.mean(t_acc)
+        # compute statistics and clean up after epoch
+        running_stats = np.mean(np.array(running_stats), axis=0)
+        self._reset(
+            epoch, mode="train" if train else "valid", loss=running_stats[0],
+            accuracy=running_stats[1])
+        return running_stats
 
     def train(
         self,
-        train_dataset: Dataset,
-        valid_dataset: Dataset,
+        train_dataset: torch.utils.data.Dataset,
+        valid_dataset: torch.utils.data.Dataset,
         batch_size: int,
         epochs: int,
         resume: bool = False
@@ -238,9 +295,9 @@ class CoreTrainer(ABC):
         stochastic gradient descent.
 
         Args:
-            train_dataset (Dataset):
+            train_dataset (torch.utils.data.Dataset):
                 Annotated dataset on which to train model.
-            valid_dataset (Dataset):
+            valid_dataset (torch.utils.data.Dataset):
                 Annotated dataset on which to validate model at the end of each
                 epoch.
             batch_size (int):
@@ -254,45 +311,25 @@ class CoreTrainer(ABC):
                 If True, resume training from saved checkpoint.
                 Defaults to False.
         """
-        E, O, S = "epoch", "optimizer", "scheduler"
-        # load model-specific checkpoint if it exists and resume training
-        epoch = 0
-        if resume:
+        E, O, S, epoch, peak_acc = "epoch", "optimizer", "scheduler", 0, 0
+
+        # load model-specific checkpoint
+        if resume and self.model_path.is_file():
             self.model, extras = utils.load(
                 self.model_path, self.model, device=self.device,
                 load_dict={O: self.optimizer, S: self.scheduler})
+            epoch += extras[E] + 1
 
-            epoch
-        check = resume and self.save_safetensors.is_file()
-        e = self._load_checkpoint() + 1 if check else 0
-        my_peak = 0
-        train_loader = self._get_loader(train_dataset, batch_size)
-        for e in aau.pbar(range(e, epochs), "epoch"):
-            t_loss, t_acc, t_matrix = [], [], self.template.clone()
-
-            # training phase
-            self._learning_mode()
-            for sample, labels in train_loader:
-                # forward pass
-                output, loss = self._step(sample, labels)
-
-                # collect running statistics
-                acc, t_matrix = self._step_stats(
-                    labels=labels, output=output, matrix=t_matrix)
-                t_loss, t_acc = t_loss + [loss.item()], t_acc + [acc]
-
-            # save train statistics
-            self._save_stats(
-                e, mode=self._MODE[0], loss=t_loss, acc=t_acc, matrix=t_matrix)
-
-            # validation phase
-            v_loss, v_acc = self.test(
-                dataset=valid_dataset, batch_size=batch_size, epoch=e,
-                mode=self._MODE[1])
+        # prepare datasets
+        train_loader = utils.get_dataloader(train_dataset, batch_size)
+        valid_loader = utils.get_dataloader(valid_dataset, batch_size)
+        for e in cdu.pbar(range(epoch, epochs), "epoch"):
+            train_stats = self._epoch(train_loader, train=True, epoch=e)
+            valid_stats = self._epoch(valid_loader, train=False, epoch=e)
 
             # modify learning rate based on validation loss, clean up
-            self.sched.step(v_loss)
-            if v_acc <= my_peak:
+            self.scheduler.step(valid_stats[0])
+            if valid_stats[1] <= peak_acc:
                 continue
 
             my_peak = max(v_acc, my_peak)
