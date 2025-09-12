@@ -209,13 +209,13 @@ Distributed under the Apache License. See LICENSE.txt for more information.
 <!-- Contact -->
 ### Contact
 
-Ike Ogbonna, MS (Ike.Ogbonna@ucsf.edu - ikestar99@hotmail.com)
-Cathryn Cadwell, MD, PhD (Cathryn.Cadwell@ucsf.edu)
+- Ike Ogbonna, MS (Ike.Ogbonna@ucsf.edu - ikestar99@hotmail.com)
+- Cathryn Cadwell, MD, PhD (Cathryn.Cadwell@ucsf.edu)
 
 
 <!-- Acknowledgments -->
 ### Acknowledgements
 
- - logo art: Edward Valenzuela, MS (edward.valenzuela@ucsf.edu)
- - badges: [Shields.io](https://shields.io/)
- - readme template: [awesome-readme-template](https://github.com/Louis3797/awesome-readme-template)
+- logo art: Edward Valenzuela, MS (edward.valenzuela@ucsf.edu)
+- badges: [Shields.io](https://shields.io/)
+- readme template: [awesome-readme-template](https://github.com/Louis3797/awesome-readme-template)
