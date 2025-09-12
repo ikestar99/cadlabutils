@@ -117,7 +117,7 @@ pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[ar
 pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[files]"
 
 # Pytorch utilities
-pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[learning]"
+pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[ml]"
 
 # Complete install
 pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[dev]"
@@ -138,7 +138,7 @@ pip install -e ".[dev]"
 cadlabutils includes a set of optional dependencies for:
 - `[arrays]`: array operations
 - `[files]`: specific file extensions
-- `[learning]`: deep learning with [`pytorch`](https://pytorch.org/)
+- `[ml]`: deep learning with [`pytorch`](https://pytorch.org/)
 - `[dev]`: all auxiliary dependencies
 - See [`pyproject.toml`](https://github.com/ikestar99/cadlabutils/blob/main/pyproject.toml) for specific packages
 in each set of optional dependencies.
@@ -159,15 +159,15 @@ with cdu_h5.File("/tmp/path.h5", mode="w") as data:
 
 Other modules contain dependencies that are often used in combination, and thus share a single namespace and should be
 installed together.
+
 ```python
 from pathlib import Path
 
-import cadlabutils.learning as cdu_l
+import cadlabutils.ml as cdu_ml
 
-
-model = cdu_l.SNEMI3D(c_i=1, c_o=3)
+model = cdu_ml.SNEMI3D(c_i=1, c_o=3)
 save_file = Path("/Path/to/saved/weights.safetensors")
-model, _ = cdu_l.load(save_file, model, device=cdu_l.get_device(gpu=0))
+model, _ = cdu_ml.load(save_file, model, device=cdu_ml.get_device(gpu=0))
 ```
 
 `cadlabutils.standard` contains utility functions using the standard library or required dependencies like

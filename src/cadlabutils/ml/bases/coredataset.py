@@ -81,6 +81,11 @@ class CoreDataset(Dataset):
     >>> test_dataset.get_metadata("label")
     array(['head', 'head', 'head', 'tail', 'tail', 'tail'], dtype=object)
 
+    Get all values of multiple metadata variables.
+    >>> test_dataset.get_metadata(["label", "count"])
+    array(['head-1', 'head-2', 'head-3', 'tail-4', 'tail-6', 'tail-8'],
+          dtype=object)
+
     Get data with set metadata values.
     >>> test_idx = test_dataset.filter({"label": ["head"]})
     >>> test_idx.meta  # doctest: +NORMALIZE_WHITESPACE
@@ -148,7 +153,6 @@ class CoreDataset(Dataset):
     ):
         super(CoreDataset, self).__init__()
         self.parent = parent
-
 
         # transfer existing metadata
         if isinstance(samples, pd.DataFrame):
@@ -247,43 +251,34 @@ class CoreDataset(Dataset):
             parent=self if self.parent is None else self.parent)
         return subset
 
-    def _splice(
-            self,
-            meta_vars: list[str, ...]
-    ):
-        """Concatenate metadata variables to identify unique combinations.
-
-        Parameters
-        ----------
-        meta_vars : list[str]
-            Metadata variables to concatenate.
-
-        Returns
-        -------
-        splice : np.ndarray
-            Contains `str` of spliced metadata values per datum.
-        """
-        splice = self.meta.index.to_frame(index=False)[meta_vars].astype(
-            str).agg("-".join, axis=1).to_numpy()
-        return splice
-
     def get_metadata(
             self,
-            meta_var: str
+            meta_var: str | list[str]
     ):
-        """Get values of given metadata variable across all samples.
+        """Get values of given metadata variable(s) across all samples.
 
         Parameters
         ----------
-        meta_var : str
-            Name of metadata variable.
+        meta_var : str | list[str]
+            Name of metadata variable(s).
 
         Returns
         -------
         np.ndarray
-            Values of metadata variable across all samples.
+            Values of metadata variable across all samples. If `meta_var` is a
+            list, metadata values are spliced together as type ``str`` for each
+            sample with "-" as a separator.
         """
-        return self.meta.index.get_level_values(meta_var).to_numpy()
+        meta_var = (
+            meta_var[0] if isinstance(meta_var, list) and len(meta_var) == 1
+            else meta_var)
+        if type(meta_var) is str:
+            metadata = self.meta.index.get_level_values(meta_var).to_numpy()
+        else:
+            metadata = self.meta.index.to_frame(index=False)[meta_var].astype(
+                str).agg("-".join, axis=1).to_numpy()
+
+        return metadata
 
     def filter(
             self,
@@ -316,8 +311,8 @@ class CoreDataset(Dataset):
     def k_fold(
             self,
             n_folds: int,
-            stratify: list[str, ...] = None,
-            grouping: list[str, ...] = None,
+            stratify: list[str] = None,
+            grouping: list[str] = None,
             shuffle: bool = True,
             random_state: int = 42
     ):
@@ -369,10 +364,11 @@ class CoreDataset(Dataset):
         model generalizes to data excluded from training.
         """
         # create composite metadata variable for stratification and grouping
-        strat = np.ones(len(self)) if stratify is None else self._splice(
+        strat = np.ones(len(self)) if stratify is None else self.get_metadata(
             stratify)
-        group = np.arange(len(self)) if grouping is None else self._splice(
-            grouping)
+        group = (
+            np.arange(len(self)) if grouping is None else self.get_metadata(
+                grouping))
 
         # verify adequate data per strata for desired number of groups
         _, counts = np.unique(stratify, return_counts=True)

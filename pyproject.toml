@@ -37,14 +37,14 @@ files = [
   "zarr~=2.18.3",
 ]
 
-learning = [
+ml = [
   "torch~=2.7.1",
   "safetensors~=0.5.3",
   "scikit-learn~=1.6.1",
 ]
 
 dev = [
-  "cadlabutils[arrays,files,learning]"
+  "cadlabutils[arrays,files,ml]"
 ]
 
 [project.urls]

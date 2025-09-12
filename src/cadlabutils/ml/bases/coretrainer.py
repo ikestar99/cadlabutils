@@ -249,9 +249,6 @@ class CoreTrainer(ABC):
         ----------
         loader : torch.utils.data.DataLoader
             Annotated dataset wrapped in a loader.
-        batch_size : int
-            Number of samples to include in each forward pass. During
-            training, model parameters are updates once per batch.
         train : bool
             If True, prepare model for training. If False, prepare model for
             validation.
@@ -260,7 +257,7 @@ class CoreTrainer(ABC):
 
         Returns
         -------
-        running_stats : np.ndarray
+        running_stats : np.ndarray[float]
             Structure is (average_loss, average_accuracy) aggregated across all
             batches in `dataset`.
         """
@@ -311,30 +308,32 @@ class CoreTrainer(ABC):
                 If True, resume training from saved checkpoint.
                 Defaults to False.
         """
-        E, O, S, epoch, peak_acc = "epoch", "optimizer", "scheduler", 0, 0
+        ep, op, sc = "epoch", "optimizer", "scheduler"
+        epoch, t_acc, v_acc = 0, 0, 0
 
         # load model-specific checkpoint
         if resume and self.model_path.is_file():
             self.model, extras = utils.load(
                 self.model_path, self.model, device=self.device,
-                load_dict={O: self.optimizer, S: self.scheduler})
+                load_dict={op: self.optimizer, sc: self.scheduler})
             epoch += extras[E] + 1
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, batch_size)
+
+        # loop over full dataset per epoch
         for e in cdu.pbar(range(epoch, epochs), "epoch"):
             train_stats = self._epoch(train_loader, train=True, epoch=e)
             valid_stats = self._epoch(valid_loader, train=False, epoch=e)
 
-            # modify learning rate based on validation loss, clean up
+            # modify learning rate based on validation loss
             self.scheduler.step(valid_stats[0])
-            if valid_stats[1] <= peak_acc:
-                continue
+            t_acc = max(train_stats[0], t_acc)
+            v_acc = max(valid_stats[1], v_acc)
+            if valid_stats[1] >= v_acc:
+                utils.save(
+                    self.model_path, self.model,
+                    save_dict={op: self.optimizer, sc: self.scheduler}, ep=e)
 
-            my_peak = max(v_acc, my_peak)
-            utils.save(
-                self.model_path, self.model,
-                save_dict={O: self.optimizer, S: self.scheduler}, E=e)
-
-        print(f"peak validation/peak total: {my_peak:.2f} / {self.peak:.2f}")
+        print(f"peak train: {t_acc:.2f} \npeak valid: {v_acc:.2f}")
