@@ -95,6 +95,17 @@ class CoreDataset(Dataset):
               2                4
               3                0
 
+    Filter metadata values to set ratio.
+    >>> test_subset = test_dataset.balance_metadata(
+    ...     meta_var=["label"], balance={"head": 1.5, "tail": 0.5})
+    >>> test_subset.meta  # doctest: +NORMALIZE_WHITESPACE
+                     _data_index
+    day label count
+    Mon head  1                2
+              2                4
+              3                0
+        tail  6                1
+
     Generate k-fold split stratified by label metadata.
     >>> for i, (t, v) in enumerate(
     ...         test_dataset.k_fold(3, stratify=["label"])):
@@ -243,7 +254,7 @@ class CoreDataset(Dataset):
 
         Returns
         -------
-        _subset : CoreDataset
+        subset : CoreDataset
             Subset of dataset.
         """
         subset = CoreDataset(
@@ -268,21 +279,85 @@ class CoreDataset(Dataset):
             Values of metadata variable across all samples. If `meta_var` is a
             list, metadata values are spliced together as type ``str`` for each
             sample with "-" as a separator.
+
+        Notes
+        -----
+        If `meta_var` has multiple entries, they are sorted in the order that
+        they appear in instance hierarchical index.
         """
-        meta_var = (
-            meta_var[0] if isinstance(meta_var, list) and len(meta_var) == 1
-            else meta_var)
-        if type(meta_var) is str:
+        if type(meta_var) is str or len(meta_var) == 1:
+            meta_var = meta_var[0] if isinstance(meta_var, list) else meta_var
             metadata = self.meta.index.get_level_values(meta_var).to_numpy()
         else:
+            meta_var = sorted(
+                meta_var, key=lambda n: self.meta.index.names.index(n))
             metadata = self.meta.index.to_frame(index=False)[meta_var].astype(
                 str).agg("-".join, axis=1).to_numpy()
 
         return metadata
 
+    def balance_metadata(
+            self,
+            meta_var: str | list[str],
+            balance: dict[int | float | str | bool, float] = None
+    ):
+        """Normalize unique metadata prevalence to fixed ratio.
+
+        Parameters
+        ----------
+        meta_var : str | list[str]
+            Name of metadata variable(s) to balance.
+        balance : dict[int | float | str | bool, float], optional
+            key : int | float | str | bool
+                Unique combination of `meta_var` metadata values. If `meta_var`
+                is ``str`` or ``list`` with a single entry, `balance` keys must
+                be a value found in this metadata colum. Otherwise, keys must
+                be values found after splicing ``str`` metadata together.
+            value : float
+                Relative proportion of specified metadata value to keep in
+                returned dataset. Unique metadata values not listed in
+                `balance` are omitted from output dataset.
+            Defaults to None, in which case all unique combinations of metadata
+            values are set to equal prevalence.
+
+        Returns
+        -------
+        subset : CoreDataset
+            Balanced subset of dataset.
+
+        See Also
+        --------
+        get_metadata : Used to splice metadata values within sample.
+        """
+        # calculate existing distribution
+        metadata = self.get_metadata(meta_var)
+        counts = {k: v for k, v in
+                  zip(*np.unique(metadata, return_counts=True))}
+
+        # filter out unneeded labels
+        balance = {k: 1 for k in counts} if balance is None else balance
+        counts = {k: v for k, v in counts.items() if k in balance}
+
+        # compute limiting factor --> target counts
+        limiting = min(counts[k] / balance[k] for k in balance)
+        new_counts = {k: int(limiting * balance[k]) for k in balance}
+
+        # change class proportions to match calculated distribution
+        mask = np.zeros(len(metadata), dtype=bool)
+
+        # randomly sample desired proportion of each unique value
+        rng = np.random.default_rng(seed=42)
+        for k, c in new_counts.items():
+            indices = rng.choice(
+                np.nonzero(metadata == k)[0], size=c, replace=False)
+            mask[indices] = True
+
+        subset = self._subset(self.meta.loc[mask, self._INDEX].to_numpy())
+        return subset
+
     def filter(
             self,
-            pattern: dict[str: list]
+            pattern: dict[str, list]
     ):
         """Get indices of samples with specific metadata values.
 
