@@ -36,7 +36,7 @@ class CoreDataset(Dataset):
         Number of samples or observations included in dataset. If `samples` is
         a ``DataFrame``, entity should be a filtered subset of `meta` attribute
         from another instance.
-    parent : CoreDataset, optional
+    _parent : CoreDataset, optional
         Another CoreDataset instancefrom which to access underlying data.
         Defaults to None.
     **kwargs
@@ -69,8 +69,8 @@ class CoreDataset(Dataset):
     >>> # arbitrary metadata values, including constants and lists
     >>> metadata = {
     ... "day": "Mon", "label": ["head", "tail"], "count": [3, 6, 1, 4, 2, 8]}
-    >>> test_dataset = CoreDataset(len(metadata["count"]), **metadata)
-    >>> test_dataset.meta  # doctest: +NORMALIZE_WHITESPACE
+    >>> t_dataset = CoreDataset(len(metadata["count"]), **metadata)
+    >>> t_dataset.meta  # doctest: +NORMALIZE_WHITESPACE
                      _data_index
     day label count
     Mon head  1                2
@@ -81,17 +81,17 @@ class CoreDataset(Dataset):
               8                5
 
     Get all values of metadata variable.
-    >>> test_dataset.get_metadata("label")
+    >>> t_dataset.get_metadata("label")
     array(['head', 'head', 'head', 'tail', 'tail', 'tail'], dtype=object)
 
     Get all values of multiple metadata variables.
-    >>> test_dataset.get_metadata(["label", "count"])
+    >>> t_dataset.get_metadata(["label", "count"])
     array(['head-1', 'head-2', 'head-3', 'tail-4', 'tail-6', 'tail-8'],
           dtype=object)
 
     Get data with set metadata values.
-    >>> test_idx = test_dataset.filter({"label": ["head"]})
-    >>> test_idx.meta  # doctest: +NORMALIZE_WHITESPACE
+    >>> t_idx = t_dataset.filter({"label": ["head"]})
+    >>> t_idx.meta  # doctest: +NORMALIZE_WHITESPACE
                      _data_index
     day label count
     Mon head  1                2
@@ -99,9 +99,9 @@ class CoreDataset(Dataset):
               3                0
 
     Filter metadata values to set ratio.
-    >>> test_subset = test_dataset.balance_metadata(
+    >>> t_subset = t_dataset.balance_metadata(
     ...     meta_var=["label"], balance={"head": 1.5, "tail": 0.5})
-    >>> test_subset.meta  # doctest: +NORMALIZE_WHITESPACE
+    >>> t_subset.meta  # doctest: +NORMALIZE_WHITESPACE
                      _data_index
     day label count
     Mon head  1                2
@@ -111,7 +111,7 @@ class CoreDataset(Dataset):
 
     Generate k-fold split stratified by label metadata.
     >>> for i, (t, v) in enumerate(
-    ...         test_dataset.k_fold(3, stratify=["label"])):
+    ...         t_dataset.k_fold(3, stratify=["label"])):
     ...     print(f"fold {i} train:")
     ...     t.meta  # doctest: +NORMALIZE_WHITESPACE
     ...     print(f"fold {i} valid:")
@@ -162,11 +162,11 @@ class CoreDataset(Dataset):
     def __init__(
             self,
             samples: int | pd.DataFrame,
-            parent: Dataset = None,
+            _parent: Dataset = None,
             **kwargs
     ):
         super(CoreDataset, self).__init__()
-        self.parent = parent
+        self.parent = _parent
 
         # transfer existing metadata
         if isinstance(samples, pd.DataFrame):
@@ -262,8 +262,37 @@ class CoreDataset(Dataset):
         """
         subset = CoreDataset(
             self.meta[self.meta[self._INDEX].isin(sub_idx)].copy(),
-            parent=self if self.parent is None else self.parent)
+            _parent=self if self.parent is None else self.parent)
         return subset
+
+    def add_metadata(
+            self,
+            **kwargs
+    ):
+        """Add metadata level to dataset.
+
+        Parameters
+        ----------
+        **kwargs
+            key : int | str
+                Name of metadata variable to add. Must not already exist.
+            value (str | float | list | tuple | np.ndarray):
+                Values of metadata variable across samples. Iterable must have a
+                index per sample. Scalar will assign the same value to all
+                samples.
+
+        Raises
+        ------
+        KeyError
+            Metadata variable name already exists.
+        """
+        for k, v in kwargs.items():
+            if k in self.meta.index.names:
+                raise KeyError(f"{k} metadata already exists in dataset.")
+
+            self.meta[k] = v
+
+        self.meta = self.meta.set_index([k for k in kwargs], append=True)
 
     def get_metadata(
             self,

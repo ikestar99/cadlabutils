@@ -378,3 +378,42 @@ def sparse_to_arr(
     dense = np.zeros(np.asarray(dims, dtype=int), dtype=values.dtype)
     dense[tuple(coords.T.astype(int))] = values
     return dense
+
+
+def none_concat(
+        arr_2: np.ndarray,
+        arr_1: np.ndarray | None,
+        axis: int = 0
+):
+    """Concatenate two arrays, with flexible behavior if one array is None.
+
+    Parameters
+    ----------
+    arr_2 : np.ndarray
+        Array to concatenate to the end of a growing sequence.
+    arr_1 : np.ndarray | None
+        Array to concatenate to the beginning of a growing sequence. If `arr_1`
+        is ``None``, arr_2 is the beginning of the sequence.
+    axis : int, optional
+        Axis along which to concatenate arrays.
+        Defaults to 0.
+
+    Returns
+    -------
+    arr : np.ndarray
+        Concatenated array.
+
+    Examples
+    --------
+    Concatenate two non-None arrays.
+    >>> t_arr_1 = np.arange(5)
+    >>> t_arr_2 = np.arange(5) + 5
+    >>> none_concat(t_arr_2, t_arr_1)
+    array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+    Concatenate with None value.
+    >>> none_concat(t_arr_2, None)
+    array([5, 6, 7, 8, 9])
+    """
+    arr = arr_2 if arr_1 is None else np.concatenate((arr_1, arr_2), axis=axis)
+    return arr

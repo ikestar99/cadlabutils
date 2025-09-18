@@ -78,6 +78,6 @@ def arr_slice(
     start = np.array(start) - np.array(s_buff)
     start = np.maximum(start, 0)
     stop = np.array(stop) + np.array(e_buff)
-    stop = np.minimum(stop, stop if end is None else end)
+    stop = stop if end is None else np.minimum(stop, end)
     step = np.ones(len(start)) * step if isinstance(step, int) else step
     return tuple(slice(*list(map(int, s))) for s in zip(start, stop, step))

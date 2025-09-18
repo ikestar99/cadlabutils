@@ -4,3 +4,8 @@
 Created on Aug 15 2025
 @author: ike
 """
+
+
+from .arrays import *
+from .slicing import *
+from .geometry import *
