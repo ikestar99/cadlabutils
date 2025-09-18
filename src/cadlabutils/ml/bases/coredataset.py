@@ -32,17 +32,20 @@ class CoreDataset(Dataset):
 
     Parameters
     ----------
-    samples : int
-        Number of samples or observations included in dataset.
+    samples : int | pd.DataFrame
+        Number of samples or observations included in dataset. If `samples` is
+        a ``DataFrame``, entity should be a filtered subset of `meta` attribute
+        from another instance.
     parent : CoreDataset, optional
         Another CoreDataset instancefrom which to access underlying data.
         Defaults to None.
     **kwargs
         key : int | str
             Name of metadata variable.
-        value (list | tuple):
-            Values of metadata variable across samples. Must have a value per
-            sample or length that is a factor of the length of the dataset.
+        value (str | float | list | tuple | np.ndarray):
+            Values of metadata variable across samples. Iterable must have a
+            index per sample or a length that can be tiled to fit size of
+            dataset. Scalar will assign the same value to all samples.
 
     Raises
     ------
