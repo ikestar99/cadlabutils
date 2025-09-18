@@ -181,7 +181,7 @@ class CoreDataset(Dataset):
         # add metadata columns
         meta = pd.DataFrame(np.arange(samples), columns=[self._INDEX])
         for k, v in kwargs.items():
-            if any([isinstance(v, t) for t in (list, tuple)]):
+            if any([isinstance(v, t) for t in (list, tuple, np.ndarray)]):
                 repeat, remain = divmod(samples, len(v))
                 if remain != 0 or repeat == 0:
                     raise ValueError(
