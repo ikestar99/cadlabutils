@@ -142,7 +142,7 @@ def min_max_scaling(
     Returns
     -------
     scaled : np.ndarray
-        Array values scaled between new_min and new_max.
+        `arr` values scaled between new_min and new_max.
     old_min : float
         Minimum value in `arr`.
     old_max : float
@@ -171,6 +171,50 @@ def min_max_scaling(
     scaled = (arr - old_min) / (old_max - old_min)
     scaled = (scaled * (new_max - new_min)) + new_min
     return scaled.astype(dtype), old_min, old_max
+
+
+def dtype_norm(
+        arr: np.ndarray
+):
+    """Normalize array to max value allowed by dtype.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array to normalize.
+
+    Returns
+    -------
+    normed : np.ndarray
+        `arr` values normalized between [-1, 1] where 1 corresponds to the
+        maximum value allowed by `arr` dtype.
+
+    Raises
+    ------
+    NotImplementedError
+        Attempts to normalize non-numeric arrays.
+
+    Examples
+    --------
+    Normalize 8-bit array.
+    >>> t_arr = (2 ** np.arange(3, 8)).astype(np.uint8)
+    >>> t_arr
+    array([  8,  16,  32,  64, 128], dtype=uint8)
+    >>> dtype_norm(t_arr)
+    array([0.03137255, 0.0627451 , 0.1254902 , 0.25098039, 0.50196078])
+
+    Normalize float array.
+    >>> t_arr = np.array([-65500, -3000, 0, 3000, 65500]).astype(np.float16)
+    >>> dtype_norm(t_arr)
+    array([-1.    , -0.0458,  0.    ,  0.0458,  1.    ], dtype=float16)
+    """
+    info = np.iinfo if np.issubdtype(arr.dtype, np.integer) else np.finfo
+    try:
+        peak = max(abs(info(arr.dtype).min), info(arr.dtype).max)
+        normed = arr / peak
+        return normed
+    except ValueError:
+        raise NotImplementedError(f"Cannot normalize {arr.dtype} array.")
 
 
 def masked_statistic(

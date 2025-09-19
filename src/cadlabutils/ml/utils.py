@@ -16,6 +16,10 @@ from torch.utils.data import Dataset, DataLoader
 from safetensors.torch import save_file, load_file
 
 
+_SAFE = ".safetensors"
+_PTH = ".pth"
+
+
 def get_device(
         gpu: int | None = 0
 ):
@@ -153,11 +157,11 @@ def save(
     >> save(test_path, test_model, epoch=10)
     """
     # save model parameters as safetensors format
-    save_file(model.state_dict(), file.with_suffix(".safetensors"))
+    save_file(model.state_dict(), file.with_suffix(_SAFE))
 
     # save auxiliary values
     if len(save_dict) + len(kwargs) > 0:
-        file_pth = file.with_suffix(".pth")
+        file_pth = file.with_suffix(_PTH)
         saved = torch.load(file_pth) if file_pth.is_file() else {}
         saved.update(kwargs)
         saved.update({k: v.state_dict() for k, v in save_dict.items()})
@@ -216,11 +220,11 @@ def load(
     {'epoch': 10}
     """
     # load model parameters from safetensors format
-    params = load_file(file.with_suffix(".safetensors"))
+    params = load_file(file.with_suffix(_SAFE))
     model.load_state_dict({k: v.to(device) for k, v in params.items()})
 
     # load auxiliary values
-    file_pth = file.with_suffix(".pth")
+    file_pth = file.with_suffix(_PTH)
     extras = {} if not file_pth.is_file() else torch.load(
         file_pth, map_location=device)
 

@@ -9,6 +9,7 @@
 import numpy as np
 import pandas as pd
 
+from pathlib import Path
 from torch.utils.data import Dataset
 from sklearn.model_selection import StratifiedGroupKFold
 
@@ -27,15 +28,20 @@ class CoreDataset(Dataset):
         Hierarchically indexed DataFrame storing metadata. Has shape
         (n_samples, n_metadata_variables + 1).
     parent : CoreDataset | None
-        If not None, point to another CoreDataset instancefrom which to access
-        underlying data.
+        Parent CoreDataset instance for which the current instance is a
+        filtered view. Mediates access to underlying data.
+        Defaults to None.
+    truth_var : str | None
+        Metadata variable to use as ground truth label for classification.
+        Defaults to None.
 
     Parameters
     ----------
-    samples : int | pd.DataFrame
-        Number of samples or observations included in dataset. If `samples` is
-        a ``DataFrame``, entity should be a filtered subset of `meta` attribute
-        from another instance.
+    samples : int | str | Path | pd.DataFrame
+        If ``int``, number of samples or observations included in dataset.
+        If ``str`` or ``Path``, points to a file containing saved metadata.
+        If ``pd.DataFrame``, a filtered subset of `meta` attribute from parent
+        instance.
     _parent : CoreDataset, optional
         Another CoreDataset instancefrom which to access underlying data.
         Defaults to None.
@@ -161,12 +167,18 @@ class CoreDataset(Dataset):
 
     def __init__(
             self,
-            samples: int | pd.DataFrame,
+            samples: int | str | Path | pd.DataFrame,
             _parent: Dataset = None,
             **kwargs
     ):
         super(CoreDataset, self).__init__()
         self.parent = _parent
+        self.truth_var = None
+
+        # load existing metadata
+        samples = Path(samples) if type(samples) is str else samples
+        samples = pd.read_parquet(samples) if isinstance(
+            samples, Path) else samples
 
         # transfer existing metadata
         if isinstance(samples, pd.DataFrame):
@@ -175,7 +187,7 @@ class CoreDataset(Dataset):
                     f"DataFrame `samples` must have a {self._INDEX} column, "
                     + f"but none found.")
 
-            self.meta = samples
+            self.meta = samples.sort_index()
             return
 
         # add metadata columns
@@ -220,15 +232,15 @@ class CoreDataset(Dataset):
         Parameters
         ----------
         idx : int
-            0-indexed index of item.
+            Index of sample to pull.
 
         Returns
         -------
-        item : int | Any
-            Item stored at `idx`. If `parent` attribute is None, `item` is an
-            ``int`` that corresponds to the index of the `idx`th sample stored
-            in `meta` attribute. If `parent` attribute is not None, `item` is
-            the result of `parent.__getitem__(index of the `idx`th sample)`.
+        item : pd.Series | Any
+            sample stored at `idx`. If `parent` attribute is None, `item` is a
+            ``Series`` that contains all metadata for the `idx`th sample stored
+            in the instance. If `parent` attribute is not None, `item` is the
+            result of `parent.__getitem__(index of the `idx`th sample)`.
 
         Notes
         -----
@@ -239,9 +251,69 @@ class CoreDataset(Dataset):
         stored in `meta[CoreDataset._INDEX]`.
         `CoreDataset.__getitem__` takes the former index system as input.
         """
-        idx = self.meta.iloc[idx][self._INDEX]
-        item = idx if self.parent is None else self.parent[idx]
+        item = self.meta.iloc[[idx]].reset_index(drop=False).iloc[0]
+        item = item if self.parent is None else self.parent[item[self._INDEX]]
         return item
+
+    def __add__(
+            self,
+            other
+    ):
+        """Add two instances together.
+
+        Parameters
+        ----------
+        other : CoreDataset
+            Instance to add to current instance.
+
+        Returns
+        -------
+        added : CoreDataset
+            New instance with combined deduplicated metadata.
+        """
+        if type(other) is not CoreDataset:
+            raise ValueError(
+                f"Cannot add {other.__class__.__name__} to CoreDataset.")
+        elif other.parent != self.parent or self.parent is None:
+            raise ValueError("Summed CoreDatasets must have the same parent.")
+        elif self.meta.index.names != other.meta.index.names:
+            raise KeyError(
+                "Summed CoreDatasets must have the same metadata variables")
+
+        add_meta = pd.concat([self.meta, other.meta]).drop_duplicates(
+            subset=self._INDEX, keep="first")
+        added = CoreDataset(add_meta, _parent=self.parent)
+        added.truth_var = self.truth_var
+        return added
+
+    def __radd__(
+            self,
+            other
+    ):
+        """Add two instances together. See __add__ for more information."""
+        return self.__add__(other)
+
+    def __iadd__(
+            self,
+            other
+    ):
+        """Add two instances in-place. See __add__ for more information."""
+        self.meta = (self + other).meta
+        return self
+
+    def _save(
+            self,
+            meta_csv: Path
+    ):
+        """Save metadata in compressed parquet format.
+
+        Parameters
+        ----------
+        meta_csv : Path
+            Path in which to save metadata (.parquet).
+        """
+        meta_csv = meta_csv.with_suffix(".parquet")
+        self.meta.to_parquet(meta_csv, index=True, compression="zstd")
 
     def _subset(
             self,
@@ -267,12 +339,17 @@ class CoreDataset(Dataset):
 
     def add_metadata(
             self,
+            truth_var: str = None,
             **kwargs
     ):
         """Add metadata level to dataset.
 
         Parameters
         ----------
+        truth_var : str | None
+            New metadata variable to set as ground truth label. May either be
+            an existing variable or one added during function call.
+            Defaults to None.
         **kwargs
             key : int | str
                 Name of metadata variable to add. Must not already exist.
@@ -284,7 +361,7 @@ class CoreDataset(Dataset):
         Raises
         ------
         KeyError
-            Metadata variable name already exists.
+            Metadata variable name already exists in instance data.
         """
         for k, v in kwargs.items():
             if k in self.meta.index.names:
@@ -293,6 +370,7 @@ class CoreDataset(Dataset):
             self.meta[k] = v
 
         self.meta = self.meta.set_index([k for k in kwargs], append=True)
+        self.truth_var = self.truth_var if truth_var is None else truth_var
 
     def get_metadata(
             self,

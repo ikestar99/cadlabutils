@@ -14,9 +14,6 @@ from pathlib import Path
 from numcodecs import Blosc
 
 
-IntArrayLike = Union[list[int] | tuple[int] | np.ndarray[int]]
-
-
 def make_zarr(
         file: Path,
         shape: tuple[int],
@@ -65,22 +62,54 @@ def make_zarr(
 
 
 def resize_zarr(
-        zarr_file: zarr.Array,
-        new_shape: IntArrayLike
+        z_arr: zarr.Array,
+        axes: dict[int, int]
 ):
     """Resize zarr array.
 
     Parameters
     ----------
-    zarr_file : zarr.Array
+    z_arr : zarr.Array
         Zarr array to resize.
-    new_shape : IntArrayLike
-        Shape of `zarr_file` after resizing.
+    axes : dict[int, int]
+        key : int
+            Index of axis to resize.
+        value:
+            Quantity to extend specified axis.
 
     Returns
     -------
-    zarr_file : zarr.Array
-        Resized `zarr_file`.
+    old_shape : tuple[int]
+        Shape of `zarr_file` before resizing.
     """
-    zarr_file.resize(np.maximum(zarr_file.shape, new_shape))
-    return zarr_file
+    old_shape = z_arr.shape
+    new_shape = np.array(old_shape, dtype=int)
+    for k, v in axes.items():
+        new_shape[k] += v
+
+    z_arr.resize(new_shape)
+    return old_shape
+
+
+def consolidate_zarr(
+        z_arr: Path | zarr.Array,
+):
+    """Work with consolidated zarr array metadata.
+
+    Parameters
+    ----------
+    z_arr : Path | zarr.Array
+        If ``Path``, open zarr file with consolidated metadata (.zarr).
+        Otherwise, if ``zarr.Array``, consolidate file metadata.
+
+    Returns
+    -------
+    z_arr : zarr.Array
+        `z_arr` after manipulation
+    """
+    if isinstance(z_arr, Path):
+        z_arr = zarr.open_consolidated(z_arr, mode="r")
+    else:
+        zarr.consolidate_metadata(z_arr)
+
+    return z_arr
