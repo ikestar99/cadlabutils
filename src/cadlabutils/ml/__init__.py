@@ -6,9 +6,21 @@ Created on Tue Aug 12 09:00:00 2025
 """
 
 
-from .bases import *
-from .convnets import *
+import warnings
 
-from .utils import *
-from .metrics import *
-from .modules import *
+
+ERRORS = []
+
+try:
+    from .bases import *
+    from .convnets import *
+
+    from .utils import *
+    from .metrics import *
+    from .modules import *
+except ImportError:
+    ERRORS.append("ml")
+
+
+if len(ERRORS) > 0:
+    warnings.warn(f"cadlabutils.ml: {', '.join(ERRORS)} not available")

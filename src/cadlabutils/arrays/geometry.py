@@ -11,10 +11,10 @@ import scipy.ndimage as scn
 
 
 CIRCLE_FORMULAS = {
-    "circumference": lambda x: 2 * np.pi * x,
-    "area": lambda x: np.pi * (x ** 2),
-    "surface area": lambda x: 4 * np.pi * (x ** 2),
-    "volume": lambda x: (4 / 3) * np.pi * (x ** 3),
+    "c": lambda x: 2 * np.pi * x,
+    "a": lambda x: np.pi * (x ** 2),
+    "s": lambda x: 4 * np.pi * (x ** 2),
+    "v": lambda x: (4 / 3) * np.pi * (x ** 3),
 }
 
 
@@ -31,10 +31,10 @@ def radial_measure(
         Radius of circle.
     mode : str
         Measure to calculate. Valid options are:
-        - circumference
-        - area
-        - surface area
-        - volume
+        - "c": circumference
+        - "a": area
+        - "s": surface area
+        - "v": volume
     as_int : bool, optional
         If True, round measure to nearest integer.
         Defaults to False.
@@ -48,15 +48,15 @@ def radial_measure(
     --------
     Compute circumference, area, surface area, and volume of radius 1.
     >>> radius = 1
-    >>> radial_measure(radius, mode="circumference")
+    >>> radial_measure(radius, mode="c")
     6.283185307179586
-    >>> radial_measure(radius, mode="area")
+    >>> radial_measure(radius, mode="a")
     3.141592653589793
-    >>> radial_measure(radius, mode="surface area")
+    >>> radial_measure(radius, mode="s")
     12.566370614359172
-    >>> radial_measure(radius, mode="volume")
+    >>> radial_measure(radius, mode="v")
     4.1887902047863905
-    >>> radial_measure(radius, mode="volume", as_int=True)
+    >>> radial_measure(radius, mode="v", as_int=True)
     4
     """
     if mode not in CIRCLE_FORMULAS:

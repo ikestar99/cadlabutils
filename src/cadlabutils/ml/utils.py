@@ -118,7 +118,7 @@ def get_dataloader(
 def save(
         file: Path,
         model: nn.Module,
-        save_dict: dict[str, object],
+        save_dict: dict[str, object] = None,
         **kwargs
 ):
     """Save model parameters as series of checkpoint files.
@@ -129,11 +129,12 @@ def save(
         location in which to save checkpoints.
     model : nn.module
         Model to save in checkpoint file.
-    save_dict : dict[str, object]
+    save_dict : dict[str, object], optional
         key : str
             Key of state dict to save in companion .pth file.
         value : object
             Object to save state via `state_dict` method.
+        Default to None.
     **kwargs
         Keyword arguments. Additional items are saved in a tandem .pth file.
 
@@ -158,6 +159,7 @@ def save(
     """
     # save model parameters as safetensors format
     save_file(model.state_dict(), file.with_suffix(_SAFE))
+    save_dict = {} if save_dict is None else save_dict
 
     # save auxiliary values
     if len(save_dict) + len(kwargs) > 0:
@@ -172,7 +174,7 @@ def load(
         file: Path,
         model: nn.Module,
         device: torch.device,
-        load_dict: dict[str, object]
+        load_dict: dict[str, object] = None
 ):
     """
     Load saved model from a series of checkpoint files.
@@ -185,11 +187,12 @@ def load(
         Model in which to load parameters.
     device : torch.device
         Device on which to load saved tensors.
-    load_dict : dict[str, object]
+    load_dict : dict[str, object], optional
         key : str
             Key of state dict stored in companion .pth file.
         value : object
             Object to update in place using `load_state_dict` method.
+        Defaults to None.
 
     Returns
     -------
@@ -229,6 +232,7 @@ def load(
         file_pth, map_location=device)
 
     # load state dicts
+    load_dict = {} if load_dict is None else load_dict
     for k in set(load_dict.keys()).intersection(extras.keys()):
         load_dict[k].load_state_dict(extras[k])
 

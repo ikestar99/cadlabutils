@@ -6,6 +6,19 @@ Created on Aug 15 2025
 """
 
 
+import warnings
+
 from .arrays import *
 from .slicing import *
 from .geometry import *
+
+
+ERRORS = []
+
+try:
+    from .align import *
+except ImportError:
+    ERRORS.append("align")
+
+if len(ERRORS) > 0:
+    warnings.warn(f"cadlabutils.arrays: {', '.join(ERRORS)} not available")

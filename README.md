@@ -140,38 +140,51 @@ cadlabutils includes a set of optional dependencies for:
 - `[files]`: specific file extensions
 - `[ml]`: deep learning with [`pytorch`](https://pytorch.org/)
 - `[dev]`: all auxiliary dependencies
-- See [`pyproject.toml`](https://github.com/ikestar99/cadlabutils/blob/main/pyproject.toml) for specific packages
-in each set of optional dependencies.
+- See [`pyproject.toml`](https://github.com/ikestar99/cadlabutils/blob/main/pyproject.toml) for specific packages in each set of optional dependencies.
+
+All available utilities can be accessed directly from the namespace of the corresponding optional dependency.
+
+```python
+# access array utilities
+import cadlabutils as cdu
+import cadlabutils.arrays as arrays
+
+
+# equivalent methods
+area_1 = cdu.arrays.radial_measure(radius=5, mode="a")
+area_2 = arrays.radial_measure(radius=5, mode="a")
+```
 
 Some included utilities and dependencies aren't applicable to all projects, such as
 [`zarr`](https://zarr.readthedocs.io/en/stable/). These imports are limited to the submodules that use them directly.
 Thus, a project that requires [`h5py`](https://www.h5py.org/) but not [`zarr`](https://zarr.readthedocs.io/en/stable/)
 need not install all packages included in the `[files]` optional dependency build.
 
-Instead, use a minimal install of `cadlabutils` and import only the modules you need:
+Instead, use a minimal install of `cadlabutils` and access only the modules you need:
 ```python
-import cadlabutils.files.h5s as cdu_h5
+import cadlabutils.files as cdu_f
 
 
-with cdu_h5.File("/tmp/path.h5", mode="w") as data:
-    dset = cdu_h5.make_dataset(data, name="dataset_0", shape=(100, 100), dtype=int)
+with cdu_f.h5s.File("/tmp/path.h5", mode="w") as data:
+    dset = cdu_f.h5s.make_dataset(data, name="dataset_0", shape=(100, 100), dtype=int)
 ```
 
-Other modules contain dependencies that are often used in combination, and thus share a single namespace and should be
-installed together.
+Other modules contain dependencies that are often used in combination, and thus share a single namespace.
 
 ```python
 from pathlib import Path
 
-import cadlabutils.ml as cdu_ml
+import cadlabutils.ml as cdu_m
 
-model = cdu_ml.SNEMI3D(c_i=1, c_o=3)
+
+model = cdu_m.SNEMI3D(c_i=1, c_o=3)
 save_file = Path("/Path/to/saved/weights.safetensors")
-model, _ = cdu_ml.load(save_file, model, device=cdu_ml.get_device(gpu=0))
+model, _ = cdu_m.load(save_file, model, device=cdu_m.get_device(gpu=0))
 ```
 
 `cadlabutils.standard` contains utility functions using the standard library or required dependencies like
 [`rich`](https://rich.readthedocs.io/en/stable/). Thus, these functions are all available under the main namespace.
+
 ```python
 import cadlabutils as cdu
 

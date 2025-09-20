@@ -86,6 +86,12 @@ class CoreDataset(Dataset):
               6                1
               8                5
 
+    Summarize metadata distribution.
+    >>> t_dataset.summarize(["day", "label"])  # doctest: +NORMALIZE_WHITESPACE
+       day label  count
+    0  Mon  head      3
+    1  Mon  tail      3
+
     Get all values of metadata variable.
     >>> t_dataset.get_metadata("label")
     array(['head', 'head', 'head', 'tail', 'tail', 'tail'], dtype=object)
@@ -337,12 +343,34 @@ class CoreDataset(Dataset):
             _parent=self if self.parent is None else self.parent)
         return subset
 
+    def summarize(
+            self,
+            meta_var: str | list[str]
+    ):
+        """Summarize distribution of metadata values.
+
+        Parameters
+        ----------
+        meta_var : str | list[str]
+            Name of metadata variable(s) to summarize.
+
+        Returns
+        -------
+        summary : pd.DataFrame
+            Has a column for each variable in `meta_var`, a row for each unique
+            combination of metadata values, and the count of all samples with
+            each combination in "count" column.
+        """
+        summary = self.meta.copy().reset_index(drop=False)[meta_var]
+        summary = summary.groupby(meta_var).size().reset_index(name="count")
+        return summary
+
     def add_metadata(
             self,
             truth_var: str = None,
             **kwargs
     ):
-        """Add metadata level to dataset.
+        """Add metadata level(s) to dataset.
 
         Parameters
         ----------

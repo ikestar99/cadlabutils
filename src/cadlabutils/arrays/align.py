@@ -5,8 +5,8 @@ Created on Fri May  7 13:06:21 2021
 @author: ike
 """
 
+
 import numpy as np
-import skimage.util as sku
 import skimage.transform as skt
 
 from pystackreg import StackReg
