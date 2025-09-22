@@ -8,7 +8,7 @@ Created on Wed Jan 22 09:00:00 2025
 
 from rich.tree import Tree
 from rich.console import Console
-from rich.progress import track, ProgressBar
+from rich.progress import track
 
 
 def pbar(
@@ -20,7 +20,7 @@ def pbar(
 
     Parameters
     ----------
-    item : iterable
+    item
         Iterable to wrap in progress bar.
     desc : str, optional
         Description of the progress bar.
@@ -31,10 +31,11 @@ def pbar(
 
     Returns
     -------
-    ProgressBar
+    bar
         Instantiated progress bar.
     """
-    return track(item, description=f"{" " * 4 * tabs}{desc}")
+    bar = track(item, description=f"{" " * 4 * tabs}{desc}")
+    return bar
 
 
 def print_rich_tree(

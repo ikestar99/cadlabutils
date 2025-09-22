@@ -8,7 +8,7 @@ Created on Aug 15 2025
 
 import warnings
 
-from . import csvs as csv
+from . import csvs
 
 
 ERRORS = []
@@ -33,6 +33,11 @@ try:
 except ImportError:
     tiffs = None
     ERRORS.append("tiffs")
+try:
+    from . import yamls
+except ImportError:
+    yamls = None
+    ERRORS.append("yamls")
 try:
     from . import zarrs
 except ImportError:

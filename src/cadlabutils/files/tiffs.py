@@ -36,8 +36,8 @@ def save_tif(
         Keyword arguments passed to tifffile.imwrite.
     """
     tf.imwrite(
-        file, arr, imagej=True, metadata={"axes": axes}, compression="zlib",
-        **kwargs)
+        file.with_suffix(".tif"), arr, imagej=True, metadata={"axes": axes},
+        compression="zlib", **kwargs)
 
 
 def list_tif(

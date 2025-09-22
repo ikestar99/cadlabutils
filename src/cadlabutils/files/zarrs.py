@@ -56,8 +56,8 @@ def make_zarr(
     compressor = compressor if compressor != "blosc" else Blosc(
         cname="zstd", clevel=5, shuffle=Blosc.BITSHUFFLE)
     zarr_file = zarr.open(
-        file, mode="w", shape=shape, chunks=chunk, dtype=dtype,
-        fill_value=fill, compressor=compressor, **kwargs)
+        file.with_suffix(".zarr"), mode="w", shape=shape, chunks=chunk,
+        dtype=dtype, fill_value=fill, compressor=compressor, **kwargs)
     return zarr_file
 
 

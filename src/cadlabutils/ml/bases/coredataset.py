@@ -101,7 +101,7 @@ class CoreDataset(Dataset):
     array(['head-1', 'head-2', 'head-3', 'tail-4', 'tail-6', 'tail-8'],
           dtype=object)
 
-    Get data with set metadata values.
+    Filter data with set metadata values.
     >>> t_idx = t_dataset.filter({"label": ["head"]})
     >>> t_idx.meta  # doctest: +NORMALIZE_WHITESPACE
                      _data_index
@@ -110,7 +110,7 @@ class CoreDataset(Dataset):
               2                4
               3                0
 
-    Filter metadata values to set ratio.
+    Balance metadata values to set ratio.
     >>> t_subset = t_dataset.balance_metadata(
     ...     meta_var=["label"], balance={"head": 1.5, "tail": 0.5})
     >>> t_subset.meta  # doctest: +NORMALIZE_WHITESPACE
@@ -361,9 +361,45 @@ class CoreDataset(Dataset):
             combination of metadata values, and the count of all samples with
             each combination in "count" column.
         """
+        meta_var = [meta_var] if isinstance(meta_var, str) else meta_var
         summary = self.meta.copy().reset_index(drop=False)[meta_var]
-        summary = summary.groupby(meta_var).size().reset_index(name="count")
+        summary = summary.groupby(
+            meta_var, observed=True).size().reset_index(name="count")
         return summary
+
+    def get_metadata(
+            self,
+            meta_var: str | list[str]
+    ):
+        """Get values of given metadata variable(s) across all samples.
+
+        Parameters
+        ----------
+        meta_var : str | list[str]
+            Name of metadata variable(s).
+
+        Returns
+        -------
+        np.ndarray
+            Values of metadata variable across all samples. If `meta_var` is a
+            list, metadata values are spliced together as type ``str`` for each
+            sample with "-" as a separator.
+
+        Notes
+        -----
+        If `meta_var` has multiple entries, they are sorted in the order that
+        they appear in instance hierarchical index.
+        """
+        if type(meta_var) is str or len(meta_var) == 1:
+            meta_var = meta_var[0] if isinstance(meta_var, list) else meta_var
+            metadata = self.meta.index.get_level_values(meta_var).to_numpy()
+        else:
+            meta_var = sorted(
+                meta_var, key=lambda n: self.meta.index.names.index(n))
+            metadata = self.meta.index.to_frame(index=False)[meta_var].astype(
+                str).agg("-".join, axis=1).to_numpy()
+
+        return metadata
 
     def add_metadata(
             self,
@@ -400,40 +436,6 @@ class CoreDataset(Dataset):
         self.meta = self.meta.set_index([k for k in kwargs], append=True)
         self.truth_var = self.truth_var if truth_var is None else truth_var
 
-    def get_metadata(
-            self,
-            meta_var: str | list[str]
-    ):
-        """Get values of given metadata variable(s) across all samples.
-
-        Parameters
-        ----------
-        meta_var : str | list[str]
-            Name of metadata variable(s).
-
-        Returns
-        -------
-        np.ndarray
-            Values of metadata variable across all samples. If `meta_var` is a
-            list, metadata values are spliced together as type ``str`` for each
-            sample with "-" as a separator.
-
-        Notes
-        -----
-        If `meta_var` has multiple entries, they are sorted in the order that
-        they appear in instance hierarchical index.
-        """
-        if type(meta_var) is str or len(meta_var) == 1:
-            meta_var = meta_var[0] if isinstance(meta_var, list) else meta_var
-            metadata = self.meta.index.get_level_values(meta_var).to_numpy()
-        else:
-            meta_var = sorted(
-                meta_var, key=lambda n: self.meta.index.names.index(n))
-            metadata = self.meta.index.to_frame(index=False)[meta_var].astype(
-                str).agg("-".join, axis=1).to_numpy()
-
-        return metadata
-
     def balance_metadata(
             self,
             meta_var: str | list[str],
@@ -460,7 +462,7 @@ class CoreDataset(Dataset):
 
         Returns
         -------
-        subset : CoreDataset
+        CoreDataset
             Balanced subset of dataset.
 
         See Also
@@ -490,12 +492,11 @@ class CoreDataset(Dataset):
                 np.nonzero(metadata == k)[0], size=c, replace=False)
             mask[indices] = True
 
-        subset = self._subset(self.meta.loc[mask, self._INDEX].to_numpy())
-        return subset
+        return self._subset(self.meta.loc[mask, self._INDEX].to_numpy())
 
     def filter(
             self,
-            pattern: dict[str, list]
+            pattern: dict[str, list | tuple | np.ndarray]
     ):
         """Get indices of samples with specific metadata values.
 
@@ -515,7 +516,7 @@ class CoreDataset(Dataset):
         """
         mask = None
         for k, v in pattern.items():
-            pos = self.meta.index.isin(np.atleast_1d(v), level=k)
+            pos = self.meta.index.isin(v, level=k)
             mask = pos if mask is None else (mask & pos)
 
         sub_idx = self.meta.loc[mask, self._INDEX].to_numpy()
