@@ -105,7 +105,7 @@ class CoreTrainer(ABC):
             model: nn.Module,
             model_kwargs: dict,
             out_dir: Path,
-            from_config : bool = False,
+            from_config: bool = False,
             criterion: type = nn.CrossEntropyLoss,
             optimizer: type = torch.optim.Adam,
             scheduler: type = torch.optim.lr_scheduler.ReduceLROnPlateau,
@@ -208,6 +208,19 @@ class CoreTrainer(ABC):
         Notes
         -----
         Must be implemented by child classes.
+        """
+        pass
+
+    @abstractmethod
+    def _make_plots(
+            self
+    ):
+        """Generate graphs at the end of training.
+
+        Notes
+        -----
+        Must be implemented by child classes.
+        Generate plot of statistics saved during training.
         """
         pass
 
@@ -394,4 +407,5 @@ class CoreTrainer(ABC):
                     save_dict={op: self.optimizer, sc: self.scheduler},
                     epoch=e, fold=fold, curve=curve)
 
+        self._make_plots()
         return t_max, v_max

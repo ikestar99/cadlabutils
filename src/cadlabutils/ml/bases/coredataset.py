@@ -102,7 +102,7 @@ class CoreDataset(Dataset):
           dtype=object)
 
     Filter data with set metadata values.
-    >>> t_idx = t_dataset.filter({"label": ["head"]})
+    >>> t_idx = t_dataset.filter(label=["head"])
     >>> t_idx.meta  # doctest: +NORMALIZE_WHITESPACE
                      _data_index
     day label count
@@ -496,16 +496,16 @@ class CoreDataset(Dataset):
 
     def filter(
             self,
-            pattern: dict[str, list | tuple | np.ndarray]
+            **kwargs
     ):
         """Get indices of samples with specific metadata values.
 
         Parameters
         ----------
-        pattern : dict[str: list]
+        **kwargs
             key : str
                 Name of metadata variable to filter.
-            value : list
+            value : list | tuple | np.ndarray
                 Values of given metadata variable to include in _subset of full
                 dataset.
 
@@ -513,9 +513,15 @@ class CoreDataset(Dataset):
         -------
         CoreDataset
             New instance with samples matching the specified pattern.
+
+        Notes
+        -----
+        Using the key "truth_var" will automatically filter the metadata
+        variable used as ground truth labels.
         """
         mask = None
-        for k, v in pattern.items():
+        for k, v in kwargs.items():
+            k = self.truth_var if k == "truth_var" else k
             pos = self.meta.index.isin(v, level=k)
             mask = pos if mask is None else (mask & pos)
 

@@ -16,7 +16,7 @@ from pathlib import Path
 def save_tif(
         file: Path,
         arr: np.ndarray,
-        axes: str,
+        axes: str | list[str],
         **kwargs
 ):
     """Save array as ImageJ-compatible tif image with zlib compression.
@@ -27,17 +27,19 @@ def save_tif(
         Path to save image (.tif).
     arr : np.ndarray
         Array to save as image.
-    axes : str
-        Axis order of tif image. Z stack is "ZYX".
+    axes : str | list[int, str]
+        Axis order of tif image. Can either be supplied as ``str`` (ex. Z stack
+        is "ZYX") or ``list`` (ex. ["Z", "Y", "X"]).
 
     Other Parameters
     ----------------
     **kwargs : dict
         Keyword arguments passed to tifffile.imwrite.
     """
+    axes = "".join(axes) if isinstance(axes, list) else axes
     tf.imwrite(
-        file.with_suffix(".tif"), arr, imagej=True, metadata={"axes": axes},
-        compression="zlib", **kwargs)
+        file.with_suffix(".tif"), arr, imagej=True,
+        metadata={"axes": axes.upper()}, compression="zlib", **kwargs)
 
 
 def list_tif(
