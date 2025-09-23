@@ -18,7 +18,7 @@ try:
     from .utils import *
     from .metrics import *
     from .modules import *
-except ImportError:
+except FileExistsError:
     ERRORS.append("ml")
 
 
