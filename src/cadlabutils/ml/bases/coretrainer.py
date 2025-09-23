@@ -219,6 +219,7 @@ class CoreTrainer(ABC):
         for k in ("model", "criterion"):
             setattr(self, k, self._cfg[k][0](**self._cfg[k][1]))
 
+        self.model = utils.set_mode(self.model, train=True, device=self.device)
         self.optimizer = self._cfg["optimizer"][0](
             params=self.model.parameters(), **self._cfg["optimizer"][1])
         self.scheduler = self._cfg["scheduler"][0](
