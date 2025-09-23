@@ -42,7 +42,7 @@ class CoreDataset(Dataset):
         If ``str`` or ``Path``, points to a file containing saved metadata.
         If ``pd.DataFrame``, a filtered subset of `meta` attribute from parent
         instance.
-    truth_var : str
+    truth_var : str, optional
         Metadata variable to use as ground truth label for classification.
         Defaults to None.
     _parent : CoreDataset, optional
