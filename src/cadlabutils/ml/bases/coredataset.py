@@ -27,12 +27,12 @@ class CoreDataset(Dataset):
     meta : pd.DataFrame
         Hierarchically indexed DataFrame storing metadata. Has shape
         (n_samples, n_metadata_variables + 1).
+    truth_var : str
+        Metadata variable to use as ground truth label for classification.
+        Defaults to None.
     parent : CoreDataset | None
         Parent CoreDataset instance for which the current instance is a
         filtered view. Mediates access to underlying data.
-        Defaults to None.
-    truth_var : str | None
-        Metadata variable to use as ground truth label for classification.
         Defaults to None.
 
     Parameters
@@ -42,6 +42,9 @@ class CoreDataset(Dataset):
         If ``str`` or ``Path``, points to a file containing saved metadata.
         If ``pd.DataFrame``, a filtered subset of `meta` attribute from parent
         instance.
+    truth_var : str
+        Metadata variable to use as ground truth label for classification.
+        Defaults to None.
     _parent : CoreDataset, optional
         Another CoreDataset instancefrom which to access underlying data.
         Defaults to None.
@@ -174,12 +177,13 @@ class CoreDataset(Dataset):
     def __init__(
             self,
             samples: int | str | Path | pd.DataFrame,
+            truth_var: str = None,
             _parent: Dataset = None,
             **kwargs
     ):
         super(CoreDataset, self).__init__()
         self.parent = _parent
-        self.truth_var = None
+        self.truth_var = truth_var
 
         # load existing metadata
         samples = Path(samples) if type(samples) is str else samples
@@ -288,8 +292,8 @@ class CoreDataset(Dataset):
 
         add_meta = pd.concat([self.meta, other.meta]).drop_duplicates(
             subset=self._INDEX, keep="first")
-        added = CoreDataset(add_meta, _parent=self.parent)
-        added.truth_var = self.truth_var
+        added = CoreDataset(
+            add_meta, truth_var=self.truth_var, _parent=self.parent)
         return added
 
     def __radd__(
@@ -403,17 +407,12 @@ class CoreDataset(Dataset):
 
     def add_metadata(
             self,
-            truth_var: str = None,
             **kwargs
     ):
         """Add metadata level(s) to dataset.
 
         Parameters
         ----------
-        truth_var : str | None
-            New metadata variable to set as ground truth label. May either be
-            an existing variable or one added during function call.
-            Defaults to None.
         **kwargs
             key : int | str
                 Name of metadata variable to add. Must not already exist.
@@ -426,6 +425,11 @@ class CoreDataset(Dataset):
         ------
         KeyError
             Metadata variable name already exists in instance data.
+
+        Notes
+        -----
+        To use new metadata variable as ground truth, update `truth_var`
+        attribute.
         """
         for k, v in kwargs.items():
             if k in self.meta.index.names:
@@ -434,7 +438,6 @@ class CoreDataset(Dataset):
             self.meta[k] = v
 
         self.meta = self.meta.set_index([k for k in kwargs], append=True)
-        self.truth_var = self.truth_var if truth_var is None else truth_var
 
     def balance_metadata(
             self,
