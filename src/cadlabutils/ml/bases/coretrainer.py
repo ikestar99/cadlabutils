@@ -326,7 +326,7 @@ class CoreTrainer(ABC):
         fold: int = 0,
         curve: int = 0,
         tree_bar: cdu.Progress = None,
-        label: str = "epoch"
+        task_index: cdu.rp.TaskID = 0
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -360,8 +360,8 @@ class CoreTrainer(ABC):
         tree_bar : cdu.Progress, optional
             Progress bar displaying current epoch information.
             Defaults to None, in which case no epoch progress bar is displayed.
-        label : str, optional
-            Label of `tree_bar` if displayed.
+        task_index : str, optional
+            Index of epoch progress bar in `tree_bar`.
             Defaults to 'epoch'.
         """
         self.fold, self.curve = fold, curve
@@ -393,8 +393,6 @@ class CoreTrainer(ABC):
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
 
         # loop over full dataset per epoch
-        pbar = None if tree_bar is None else tree_bar.add_task(
-            "", total=epochs - epoch, label=label)
         for e in range(epoch, epochs):
             t_loss, t_acc = self._epoch(train_loader, train=True, epoch=e)
             v_loss, v_acc = self._epoch(valid_loader, train=False, epoch=e)
@@ -409,10 +407,7 @@ class CoreTrainer(ABC):
                     save_dict={op: self.optimizer, sc: self.scheduler},
                     epoch=e, fold=fold, curve=curve)
             if tree_bar is not None:
-                tree_bar.update(pbar, advance=1)
-
-        if tree_bar is not None:
-            tree_bar.remove_task(pbar)
+                tree_bar.update(task_index, advance=1)
 
         self._make_plots()
         return t_max, v_max
