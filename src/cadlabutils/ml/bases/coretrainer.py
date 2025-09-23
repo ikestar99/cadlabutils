@@ -379,6 +379,8 @@ class CoreTrainer(ABC):
             # skip if current fold/curve already completed
             if extras["fold"] < fold or extras["curve"] < curve:
                 return None, None
+            elif tree_bar is not None:
+                tree_bar.update(task_index, advance=epoch - 1)
 
         # simulate optimum batch size
         if self.batch_size is None:
