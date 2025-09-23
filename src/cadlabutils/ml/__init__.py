@@ -9,18 +9,12 @@ Created on Tue Aug 12 09:00:00 2025
 import warnings
 
 
-ERRORS = []
-
 try:
+    from .utils import *
+    from .modules import *
+    from .metrics import *
+
     from .bases import *
     from .convnets import *
-
-    from .utils import *
-    from .metrics import *
-    from .modules import *
-except FileExistsError:
-    ERRORS.append("ml")
-
-
-if len(ERRORS) > 0:
-    warnings.warn(f"cadlabutils.ml: {', '.join(ERRORS)} not available")
+except ImportError:
+    warnings.warn(f"cadlabutils.ml not available")
