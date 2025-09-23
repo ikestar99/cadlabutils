@@ -39,7 +39,7 @@ files = [
 ]
 
 ml = [
-  "torch~=2.7.1",
+  "torch>=2.7.1",
   "safetensors~=0.5.3",
   "scikit-learn~=1.6.1",
 ]
