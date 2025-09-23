@@ -27,7 +27,7 @@ arrays = [
 
 files = [
   "bs4",
-  "yaml",
+  "PyYAML",
   "h5py~=3.13.0",
   "hdf5plugin~=5.1.0",
   "natsort",
