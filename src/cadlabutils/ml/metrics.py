@@ -94,8 +94,8 @@ def simulate_batch_size(
     bs_l, bs_h = start_size, start_size
     binary_search = False
     sample = sample.unsqueeze(0)
-    target = None if target is None else torch.atleast_1d(target).unsqueeze(0)
     model = model.to(device, dtype=sample.dtype)
+    target = None if target is None else torch.tensor(target).unsqueeze(0)
 
     # loop until optimum value found
     while True:
