@@ -58,8 +58,6 @@ class CoreTrainer(ABC):
         Keyword arguments passed to `model` init.
     out_dir : pathlib.Path
         Directory in which to save training related files.
-    from_config : bool, optional
-        If True, resume prior Trainer configuration. Defaults to False.
     criterion : type, optional
         Loss function class.
         Defaults to torch.nn.CrossEntropyLoss.
@@ -105,7 +103,6 @@ class CoreTrainer(ABC):
             model: nn.Module,
             model_kwargs: dict,
             out_dir: Path,
-            from_config: bool = False,
             criterion: type = nn.CrossEntropyLoss,
             optimizer: type = torch.optim.Adam,
             scheduler: type = torch.optim.lr_scheduler.ReduceLROnPlateau,
@@ -129,21 +126,12 @@ class CoreTrainer(ABC):
             "scheduler": (scheduler, {
                 "patience": 5, "threshold": 0.01, **(scheduler_kwargs or {})})}
 
-        # check if existing configuration is available
         config_yaml = out_dir.joinpath("config.yaml")
-        if from_config:
-            if not config_yaml.is_file():
-                raise FileNotFoundError(f"{config_yaml} does not exist")
-
-            # load existing configuration
+        if config_yaml.is_file():  # load existing configuration
             config = cdu_f.yamls.from_yaml(config_yaml)
             for k, (_, v) in config.items():
                 self._cfg[k] = (self._cfg[k][0], v)
-        else:
-            if config_yaml.is_file():
-                raise FileExistsError(f"{config_yaml} already exists")
-
-            # save configuration for reuse
+        else:  # save configuration for reuse
             out_dir.mkdir(exist_ok=True, parents=True)
             cdu_f.yamls.to_yaml(
                 config_yaml, {
