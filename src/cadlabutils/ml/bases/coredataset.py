@@ -344,6 +344,7 @@ class CoreDataset(Dataset):
         """
         subset = CoreDataset(
             self.meta[self.meta[self._INDEX].isin(sub_idx)].copy(),
+            truth_var=self.truth_var,
             _parent=self if self.parent is None else self.parent)
         return subset
 
