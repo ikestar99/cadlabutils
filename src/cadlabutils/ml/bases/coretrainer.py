@@ -219,11 +219,15 @@ class CoreTrainer(ABC):
         for k in ("model", "criterion"):
             setattr(self, k, self._cfg[k][0](**self._cfg[k][1]))
 
-        self.model = utils.set_mode(self.model, train=True, device=self.device)
+        self.model = self.model.to(dtype=self.dtypes[0])
         self.optimizer = self._cfg["optimizer"][0](
             params=self.model.parameters(), **self._cfg["optimizer"][1])
         self.scheduler = self._cfg["scheduler"][0](
             optimizer=self.optimizer, **self._cfg["scheduler"][1])
+        for state in self.optimizer.state.values():
+            for key, value in state.items():
+                if isinstance(value, torch.Tensor):
+                    state[key] = value.to(self.dtypes[0])
 
     def _step(
             self,
