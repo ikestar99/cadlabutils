@@ -90,6 +90,11 @@ def simulate_batch_size(
     scalar : float, optional
         Fraction of peak size to return as optimum batch size.
         Defaults to 0.75.
+
+    Notes
+    -----
+    For training loop simulations using BatchNorm layers, `start_size` must be
+    >= 2.
     """
     bs_l, bs_h = start_size, start_size
     binary_search = False
