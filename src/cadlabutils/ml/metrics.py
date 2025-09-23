@@ -54,7 +54,7 @@ def simulate_batch_size(
         target: torch.tensor = None,
         criterion: nn.Module = None,
         optimizer: Optimizer = None,
-        start_size: int = 1,
+        start_size: int = 5,
         scalar: float = 0.75
 ):
     """Simulate optimum batch size that can fit on a given hardware device.
