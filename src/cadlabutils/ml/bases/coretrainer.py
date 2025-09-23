@@ -324,7 +324,9 @@ class CoreTrainer(ABC):
         valid_dataset: torch.utils.data.Dataset,
         epochs: int,
         fold: int = 0,
-        curve: int = 0
+        curve: int = 0,
+        tree_bar: cdu.Progress = None,
+        label: str = "epoch"
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -342,7 +344,7 @@ class CoreTrainer(ABC):
         fold : int, optional
             Current k-fold fold.
             Defaults to 0.
-        curve : int
+        curve : int, optional
             Current index along learning curve generation.
             Defaults to 0.
 
@@ -352,6 +354,15 @@ class CoreTrainer(ABC):
             Peak average training accuracy observed across epochs.
         v_max : float
             Peak average validation accuracy observed across epochs.
+
+        Other Parameters
+        ----------------
+        tree_bar : cdu.Progress, optional
+            Progress bar displaying current epoch information.
+            Defaults to None, in which case no epoch progress bar is displayed.
+        label : str, optional
+            Label of `tree_bar` if displayed.
+            Defaults to 'epoch'.
         """
         self.fold, self.curve = fold, curve
         op, sc = "optimizer", "scheduler"
@@ -382,7 +393,9 @@ class CoreTrainer(ABC):
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
 
         # loop over full dataset per epoch
-        for e in cdu.pbar(range(epoch, epochs), "epoch"):
+        pbar = None if tree_bar is None else tree_bar.add_task(
+            "", total=epochs - epoch, label=label)
+        for e in range(epoch, epochs):
             t_loss, t_acc = self._epoch(train_loader, train=True, epoch=e)
             v_loss, v_acc = self._epoch(valid_loader, train=False, epoch=e)
 
@@ -395,6 +408,11 @@ class CoreTrainer(ABC):
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
                     epoch=e, fold=fold, curve=curve)
+            if tree_bar is not None:
+                tree_bar.update(pbar, advance=1)
+
+        if tree_bar is not None:
+            tree_bar.remove_task(pbar)
 
         self._make_plots()
         return t_max, v_max
