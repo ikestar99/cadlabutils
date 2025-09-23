@@ -110,6 +110,6 @@ def consolidate_zarr(
     if isinstance(z_arr, Path):
         z_arr = zarr.open_consolidated(z_arr, mode="r")
     else:
-        zarr.consolidate_metadata(z_arr)
+        zarr.consolidate_metadata(z_arr.store)
 
     return z_arr
