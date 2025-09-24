@@ -277,9 +277,11 @@ class CoreDataset(Dataset):
                 print("padre fucked up yo")
                 print(item[self._INDEX])
                 print(self.parent.meta.iloc[[item[self._INDEX]]].reset_index(drop=False).iloc[0])
-                import sys; sys.exit()
+
 
         item = item if self.parent is None else self.parent[item[self._INDEX]]
+        import sys;
+        sys.exit()
         return item
 
     def __add__(
