@@ -326,6 +326,7 @@ def forward_pass(
     where `model(sample)` and `criterion(model(sample), target)` are both
     syntactically valid.
     """
+    print(sample.dtype, target.dtype)
     loss = None
     if None not in (target, criterion, optimizer):
         # zero gradients
@@ -338,6 +339,7 @@ def forward_pass(
         target = target.to(device, non_blocking=True, dtype=target_dtype)
         loss = criterion(output, target)
         if optimizer is not None:
+            print(sample.dtype, target.dtype, sample_dtype, target_dtype)
             # backpropagation, clip gradients, optimize
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
