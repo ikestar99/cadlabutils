@@ -148,7 +148,7 @@ def simulate_batch_size(
             torch.cuda.empty_cache()
 
 
-def classification_accuracy(
+def acc_confusion(
         output: torch.tensor,
         target: torch.tensor,
         matrix: torch.tensor = None,
