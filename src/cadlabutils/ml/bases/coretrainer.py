@@ -391,8 +391,8 @@ class CoreTrainer(ABC):
             # skip if current fold/curve already completed
             if extras["fold"] < fold or extras["curve"] < curve:
                 return None, None
-            elif tree_bar is not None:
-                tree_bar.update(task_index, advance=epoch - 1)
+            if tree_bar is not None:
+                tree_bar.update(task_index, advance=epoch)
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
