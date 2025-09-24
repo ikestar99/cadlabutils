@@ -118,6 +118,7 @@ class CoreTrainer(ABC):
         self.dtypes = dtypes
         self.model_path = out_dir.joinpath("model.safetensors")
         self.fold, self.curve, self.batch_size = 0, 0, None
+        self._abar, self._tbar = None, None
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
@@ -373,7 +374,6 @@ class CoreTrainer(ABC):
         self.fold, self.curve = fold, curve
         op, sc = "optimizer", "scheduler"
         epoch, t_max, v_max = 0, 0, 0
-        abar, tbar = None, None
 
         # simulate optimum batch size
         self._initialize()
@@ -398,8 +398,9 @@ class CoreTrainer(ABC):
 
         if tree_bar is not None:
             _, _, tot = utils.get_device_memory(self.device, units=3)
-            abar = tree_bar.add_task("", total=tot, label="used  GB")
-            tbar = tree_bar.add_task("", total=tot, label="total GB")
+            if self._abar is None:
+                self._abar = tree_bar.add_task("", total=tot, label="used  GB")
+                self._tbar = tree_bar.add_task("", total=tot, label="total GB")
             if epoch != 0:
                 tree_bar.update(task_index, advance=epoch)
 
@@ -424,12 +425,8 @@ class CoreTrainer(ABC):
             if tree_bar is not None:
                 tree_bar.update(task_index, advance=1)
                 a, u, tot = utils.get_device_memory(self.device, units=3)
-                tree_bar.update(abar, completed=a, total=tot)
-                tree_bar.update(tbar, completed=a + u, total=tot)
-
-        if tree_bar is not None:
-            tree_bar.remove_task(abar)
-            tree_bar.remove_task(tbar)
+                tree_bar.update(self._abar, completed=a)
+                tree_bar.update(self._tbar, completed=a + u)
 
         self._make_plots()
         return t_max, v_max
