@@ -262,6 +262,9 @@ class CoreDataset(Dataset):
         `CoreDataset.__getitem__` takes the former index system as input.
         """
         item = self.meta.iloc[[idx]].reset_index(drop=False).iloc[0]
+        if idx == 18225:
+            print("in core:", item)
+
         item = item if self.parent is None else self.parent[item[self._INDEX]]
         return item
 
