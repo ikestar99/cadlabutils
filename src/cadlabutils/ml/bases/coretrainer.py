@@ -118,7 +118,7 @@ class CoreTrainer(ABC):
         self.dtypes = dtypes
         self.model_path = out_dir.joinpath("model.safetensors")
         self.fold, self.curve, self.batch_size = 0, 0, None
-        self._abar, self._tbar = None, None
+        self._tree_bar, self._abar, self._tbar = None, None, None
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
@@ -317,6 +317,10 @@ class CoreTrainer(ABC):
             output, loss, target = self._step(sample, target, train=train)
             running_stats += [[loss.item(), self._step_stats(output, target)]]
             del output, loss, target
+            if self.tree_bar is not None:
+                a, u, tot = utils.get_device_memory(self.device, units=3)
+                self.tree_bar.update(self._abar, completed=a)
+                self.tree_bar.update(self._tbar, completed=a + u)
 
         # compute statistics and clean up after epoch
         agg_loss, agg_acc = np.mean(np.array(running_stats), axis=0)
@@ -397,6 +401,7 @@ class CoreTrainer(ABC):
                 return None, None
 
         if tree_bar is not None:
+            self.tree_bar = tree_bar
             _, _, tot = utils.get_device_memory(self.device, units=3)
             if self._abar is None:
                 self._abar = tree_bar.add_task("", total=tot, label="used  GB")
@@ -422,11 +427,8 @@ class CoreTrainer(ABC):
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
                     epoch=e, fold=fold, curve=curve)
-            if tree_bar is not None:
+            if self.tree_bar is not None:
                 tree_bar.update(task_index, advance=1)
-                a, u, tot = utils.get_device_memory(self.device, units=3)
-                tree_bar.update(self._abar, completed=a)
-                tree_bar.update(self._tbar, completed=a + u)
 
         self._make_plots()
         return t_max, v_max
