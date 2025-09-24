@@ -106,7 +106,5 @@ class TreeBar(Progress):
             rp.TextColumn("[bold blue]{task.fields[label]}", justify="left"),
             rp.BarColumn(bar_width=None),  # progress bar
             rp.MofNCompleteColumn(),  # shows X/Y
-            "[progress.percentage]{task.percentage:>3.0f}%",  # percentage
             rp.TimeElapsedColumn(),  # total elapsed time
-            rp.TimeRemainingColumn(),  # estimated remaining time
             **kwargs)
