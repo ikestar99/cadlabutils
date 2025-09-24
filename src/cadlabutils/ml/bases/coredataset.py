@@ -261,13 +261,13 @@ class CoreDataset(Dataset):
         stored in `meta[CoreDataset._INDEX]`.
         `CoreDataset.__getitem__` takes the former index system as input.
         """
-        try:
-            item = self.meta.iloc[[idx]].reset_index(drop=False).iloc[0]
-            item = item if self.parent is None else self.parent[item[self._INDEX]]
-        except:
+        item = self.meta.iloc[[idx]].reset_index(drop=False).iloc[0]
+        if item[self.truth_var] == -1:
             print("this shit got me fucked up yo")
             print(idx)
             print(self.meta.iloc[[idx]].reset_index(drop=False).iloc[0])
+
+        item = item if self.parent is None else self.parent[item[self._INDEX]]
         return item
 
     def __add__(
