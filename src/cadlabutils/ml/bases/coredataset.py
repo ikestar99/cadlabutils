@@ -269,15 +269,15 @@ class CoreDataset(Dataset):
 
         if self.parent is not None:
             item2 = self.parent.meta.iloc[[item[self._INDEX]]].reset_index(drop=False).iloc[0]
-        if item2[self.truth_var] == -1:
-            print("core fucked up yo")
-            print(idx)
-            print(item)
-            print("\n\n")
-            print("padre fucked up yo")
-            print(item[self._INDEX])
-            print(self.parent.meta.iloc[[item[self._INDEX]]].reset_index(drop=False).iloc[0])
-            import sys; sys.exit()
+            if item2[self.truth_var] == -1:
+                print("core fucked up yo")
+                print(idx)
+                print(item)
+                print("\n\n")
+                print("padre fucked up yo")
+                print(item[self._INDEX])
+                print(self.parent.meta.iloc[[item[self._INDEX]]].reset_index(drop=False).iloc[0])
+                import sys; sys.exit()
 
         item = item if self.parent is None else self.parent[item[self._INDEX]]
         return item
