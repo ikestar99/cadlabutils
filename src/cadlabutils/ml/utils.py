@@ -326,6 +326,26 @@ def forward_pass(
     where `model(sample)` and `criterion(model(sample), target)` are both
     syntactically valid.
     """
+
+    def _print(module, prefix=""):
+        # print this module
+        print(f"{prefix}{module.__class__.__name__}(")
+        # print parameters
+        for name, param in module.named_parameters(recurse=False):
+            print(
+                f"{prefix}  (param) {name}: {tuple(param.shape)}, dtype={param.dtype}")
+        # print buffers
+        for name, buf in module.named_buffers(recurse=False):
+            print(
+                f"{prefix}  (buffer) {name}: {tuple(buf.shape)}, dtype={buf.dtype}")
+        # recurse into submodules
+        for child_name, child in module.named_children():
+            _print(child, prefix + "  ")
+        print(f"{prefix})")
+
+    _print(model)
+
+
     loss = None
     if None not in (target, criterion, optimizer):
         # zero gradients
