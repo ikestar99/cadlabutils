@@ -12,6 +12,28 @@ import torch.nn as nn
 from .. import make_block, make_dense
 
 
+def _print(module, prefix=""):
+    # print this module
+    print(f"{prefix}{module.__class__.__name__}(")
+    # print parameters
+    for name, param in module.named_parameters(recurse=False):
+        print(
+            f"{prefix}  (param) {name}: {tuple(param.shape)}, dtype={param.dtype}")
+    # print buffers
+    for name, buf in module.named_buffers(recurse=False):
+        print(
+            f"{prefix}  (buffer) {name}: {tuple(buf.shape)}, dtype={buf.dtype}")
+    # recurse into submodules
+    for child_name, child in module.named_children():
+        _print(child, prefix + "  ")
+    print(f"{prefix})")
+
+
+
+
+
+
+
 class ResidualModule(
     nn.Module
 ):
@@ -110,6 +132,10 @@ class ResidualModule(
         module independently of all others. The output tensors are then stacked
         back together along the z axis.
         """
+        _print(self)
+
+
+
         # optional preparatory module
         x = self.prep(x) if self.prep is not None else x
 
