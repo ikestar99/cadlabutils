@@ -83,12 +83,13 @@ class CoreTrainer(ABC):
         Defaults to {"lr": 1e-3"}.
     scheduler_kwargs : dict, optional
         Keyword arguments passed to `scheduler` init.
-        Defaults to {"patience": 5, "threshold": 0.01}.
+        Defaults to {"patience": 5}.
 
     See Also
     --------
-    CoreTrainer._epoch_stats : abstract method, must be implemented by child class.
-    CoreTrainer._epoch_reset : abstract method, must be implemented by child class.
+    CoreTrainer._epoch_stats : abstract method, must be implemented by child.
+    CoreTrainer._epoch_reset : abstract method, must be implemented by child.
+    CoreTrainer._make_plots: abstract method, must be implemented by child.
 
     Notes
     -----
@@ -123,8 +124,8 @@ class CoreTrainer(ABC):
             "model": (model, model_kwargs),
             "criterion": (criterion, criterion_kwargs or {}),
             "optimizer": (optimizer, {"lr": 1e-3, **(optimizer_kwargs or {})}),
-            "scheduler": (scheduler, {
-                "patience": 5, "threshold": 0.01, **(scheduler_kwargs or {})})}
+            "scheduler": (
+                scheduler, {"patience": 5, **(scheduler_kwargs or {})})}
 
         config_yaml = out_dir.joinpath("config.yaml")
         if config_yaml.is_file():  # load existing configuration
@@ -224,10 +225,6 @@ class CoreTrainer(ABC):
             params=self.model.parameters(), **self._cfg["optimizer"][1])
         self.scheduler = self._cfg["scheduler"][0](
             optimizer=self.optimizer, **self._cfg["scheduler"][1])
-        for state in self.optimizer.state.values():
-            for key, value in state.items():
-                if isinstance(value, torch.Tensor):
-                    state[key] = value.to(self.dtypes[0])
 
     def _step(
             self,
