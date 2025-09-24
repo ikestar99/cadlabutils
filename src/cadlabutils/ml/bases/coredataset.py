@@ -261,6 +261,7 @@ class CoreDataset(Dataset):
         stored in `meta[CoreDataset._INDEX]`.
         `CoreDataset.__getitem__` takes the former index system as input.
         """
+        quitting = False
         item = self.meta.iloc[[idx]].reset_index(drop=False).iloc[0]
         if item[self.truth_var] == -1:
             print("core fucked up yo")
@@ -268,6 +269,7 @@ class CoreDataset(Dataset):
             print(item)
 
         if self.parent is not None:
+            quitting = True
             item2 = self.parent.meta.iloc[[item[self._INDEX]]].reset_index(drop=False).iloc[0]
             if item2[self.truth_var] == -1:
                 print("core fucked up yo")
@@ -280,8 +282,9 @@ class CoreDataset(Dataset):
 
 
         item = item if self.parent is None else self.parent[item[self._INDEX]]
-        import sys;
-        sys.exit()
+        if quitting:
+            import sys;
+            sys.exit()
         return item
 
     def __add__(
