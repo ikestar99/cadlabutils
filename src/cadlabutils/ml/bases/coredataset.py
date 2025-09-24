@@ -262,9 +262,8 @@ class CoreDataset(Dataset):
         `CoreDataset.__getitem__` takes the former index system as input.
         """
         item = self.meta.iloc[[idx]].reset_index(drop=False).iloc[0]
-        if idx in [18225, 15906, 10628]:
-            print(f"\n\ncore {idx} {self.parent.__class__.__name__}\n---------------------")
-            print(item)
+        print(f"\n\ncore {idx} {self.parent.__class__.__name__}\n---------------------")
+        print(item)
 
         item = item if self.parent is None else self.parent[item[self._INDEX]]
         return item
