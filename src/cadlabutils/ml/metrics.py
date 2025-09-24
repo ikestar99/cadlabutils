@@ -181,8 +181,8 @@ def acc_confusion(
     """
     # convert logits into probabilities and calculate accuracy
     output = F.softmax(output, dim=1) if logits else output
-    accuracy = int(
-        (torch.argmax(output, dim=1) == target).sum().item()) / target.numel()
+    accuracy = (torch.argmax(output, dim=1) == target).sum().item()
+    accuracy /= target.numel()
 
     # update confusion matrix probability distributions per class
     if matrix is not None:
