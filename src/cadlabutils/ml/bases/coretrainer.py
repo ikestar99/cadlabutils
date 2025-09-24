@@ -87,7 +87,7 @@ class CoreTrainer(ABC):
 
     See Also
     --------
-    CoreTrainer._epoch_stats : abstract method, must be implemented by child.
+    CoreTrainer._step_stats : abstract method, must be implemented by child.
     CoreTrainer._epoch_reset : abstract method, must be implemented by child.
     CoreTrainer._make_plots: abstract method, must be implemented by child.
 
@@ -142,7 +142,7 @@ class CoreTrainer(ABC):
         self._initialize()
 
     @abstractmethod
-    def _epoch_stats(
+    def _step_stats(
             self,
             output,
             target
@@ -324,7 +324,7 @@ class CoreTrainer(ABC):
         for sample, target in loader:
             # forward pass, backpropagation, optimization, and statistics
             output, loss = self._step(sample, target, train=train)
-            running_stats += [[loss.item(), self._epoch_stats(output, target)]]
+            running_stats += [[loss.item(), self._step_stats(output, target)]]
 
         # compute statistics and clean up after epoch
         agg_loss, agg_acc = np.mean(np.array(running_stats), axis=0)
