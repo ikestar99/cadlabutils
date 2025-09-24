@@ -368,8 +368,16 @@ class CoreTrainer(ABC):
         op, sc = "optimizer", "scheduler"
         epoch, t_max, v_max = 0, 0, 0
 
-        # load model-specific checkpoint
+        # simulate optimum batch size
         self._initialize()
+        if self.batch_size is None:
+            self.batch_size = metrics.simulate_batch_size(
+                self.model, sample=train_dataset[0][0], device=self.device,
+                target=train_dataset[0][1], criterion=self.criterion,
+                optimizer=self.optimizer)
+            print("Simulated batch size:", self.batch_size)
+
+        # load model-specific checkpoint
         if self.model_path.is_file():
             self.model, extras = utils.load(
                 self.model_path, self.model, device=self.device,
@@ -381,17 +389,6 @@ class CoreTrainer(ABC):
                 return None, None
             elif tree_bar is not None:
                 tree_bar.update(task_index, advance=epoch - 1)
-
-        # simulate optimum batch size
-        if self.batch_size is None:
-            self.model = utils.set_mode(
-                self.model, train=True, device=self.device,
-                dtype=self.dtypes[0])
-            self.batch_size = metrics.simulate_batch_size(
-                self.model, sample=train_dataset[0][0], device=self.device,
-                target=train_dataset[0][1], criterion=self.criterion,
-                optimizer=self.optimizer)
-            print("Simulated batch size:", self.batch_size)
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
