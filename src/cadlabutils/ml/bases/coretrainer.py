@@ -113,8 +113,6 @@ class CoreTrainer(ABC):
             optimizer_kwargs: dict = None,
             scheduler_kwargs: dict = None,
     ):
-        torch.set_default_dtype(dtypes[0])
-
         # set instance variables
         self.device = utils.get_device(gpu)
         self.dtypes = dtypes
