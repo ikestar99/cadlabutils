@@ -395,11 +395,13 @@ class CoreTrainer(ABC):
             # skip if current fold/curve already completed
             if extras["fold"] < fold or extras["curve"] < curve:
                 return None, None
-            if tree_bar is not None:
+
+        if tree_bar is not None:
+            _, _, tot = utils.get_device_memory(self.device, units=3)
+            abar = tree_bar.add_task("", total=tot, label="used  GB")
+            tbar = tree_bar.add_task("", total=tot, label="total GB")
+            if epoch != 0:
                 tree_bar.update(task_index, advance=epoch)
-                _, _, tot = utils.get_device_memory(self.device, units=3)
-                abar = tree_bar.add_task("", total=tot, label="used  GB")
-                tbar = tree_bar.add_task("", total=tot, label="total GB")
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
