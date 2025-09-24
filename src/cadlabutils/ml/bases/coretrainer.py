@@ -383,7 +383,7 @@ class CoreTrainer(ABC):
 
         # load model-specific checkpoint
         if self.model_path.is_file():
-            self.model, extras = utils.load(
+            extras = utils.load(
                 self.model_path, self.model, device=self.device,
                 load_dict={op: self.optimizer, sc: self.scheduler})
             epoch = extras["epoch"] + 1
