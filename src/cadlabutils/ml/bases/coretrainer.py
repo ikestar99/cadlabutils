@@ -250,6 +250,8 @@ class CoreTrainer(ABC):
             Output of forward pass through model.
         loss : torch.tensor
             Output of criterion.
+        target : torch.tensor
+            Corresponding ground truth labels moved to inference device.
 
         Notes
         -----
@@ -269,12 +271,12 @@ class CoreTrainer(ABC):
         Any such custom function must define both backpropagation
         (`loss.backward()') and optimization (`optim.step()`) steps.
         """
-        output, loss = utils.forward_pass(
+        output, loss, target = utils.forward_pass(
             self.model, sample, device=self.device, target=target,
             criterion=self.criterion,
             optimizer=self.optimizer if train else None,
             sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-        return output, loss
+        return output, loss, target
 
     def _epoch(
             self,
@@ -309,7 +311,7 @@ class CoreTrainer(ABC):
         running_stats = []
         for sample, target in loader:
             # forward pass, backpropagation, optimization, and statistics
-            output, loss = self._step(sample, target, train=train)
+            output, loss, target = self._step(sample, target, train=train)
             running_stats += [[loss.item(), self._step_stats(output, target)]]
 
         # compute statistics and clean up after epoch

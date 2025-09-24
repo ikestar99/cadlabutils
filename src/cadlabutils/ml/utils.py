@@ -310,6 +310,9 @@ def forward_pass(
         Output of forward pass through model.
     loss : torch.tensor | None
         Output of criterion. None if loss is not computed.
+    target : torch.tensor | None
+        Ground truth labels moved to corresponding device. None if `target` is
+        None.
 
     Other Parameters
     ----------------
@@ -343,4 +346,4 @@ def forward_pass(
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
             optimizer.step()
 
-    return output, loss
+    return output, loss, target
