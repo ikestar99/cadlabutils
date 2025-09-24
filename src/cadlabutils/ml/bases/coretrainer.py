@@ -219,6 +219,7 @@ class CoreTrainer(ABC):
         """Reinitialize trainable parameters."""
         self.model = self._cfg["model"][0](**self._cfg["model"][1]).to(
             dtype=self.dtypes[0])
+        print(f"inint: {self.dtypes[0]}")
         self.criterion = self._cfg["criterion"][0](**self._cfg["criterion"][1])
         self.optimizer = self._cfg["optimizer"][0](
             params=self.model.parameters(), **self._cfg["optimizer"][1])

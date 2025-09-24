@@ -339,7 +339,7 @@ def forward_pass(
         target = target.to(device, non_blocking=True, dtype=target_dtype)
         loss = criterion(output, target)
         if optimizer is not None:
-            print(sample.dtype, target.dtype, sample_dtype, target_dtype)
+            print(sample.dtype, target.dtype, output.dtype, sample_dtype, target_dtype)
             # backpropagation, clip gradients, optimize
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
