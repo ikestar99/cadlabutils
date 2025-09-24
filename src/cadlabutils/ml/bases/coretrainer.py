@@ -219,7 +219,6 @@ class CoreTrainer(ABC):
         """Reinitialize trainable parameters."""
         self.model = self._cfg["model"][0](**self._cfg["model"][1]).to(
             dtype=self.dtypes[0])
-        print(f"inint: {self.dtypes[0]}")
         self.criterion = self._cfg["criterion"][0](**self._cfg["criterion"][1])
         self.optimizer = self._cfg["optimizer"][0](
             params=self.model.parameters(), **self._cfg["optimizer"][1])
@@ -372,10 +371,10 @@ class CoreTrainer(ABC):
         # simulate optimum batch size
         self._initialize()
         if self.batch_size is None:
+            d = [s.to(dtype=t) for s, t in zip(train_dataset[0], self.dtypes)]
             self.batch_size = metrics.simulate_batch_size(
-                self.model, sample=train_dataset[0][0], device=self.device,
-                target=train_dataset[0][1], criterion=self.criterion,
-                optimizer=self.optimizer)
+                self.model, sample=d[0], device=self.device, target=d[1],
+                criterion=self.criterion, optimizer=self.optimizer)
             print("Simulated batch size:", self.batch_size)
 
         # load model-specific checkpoint

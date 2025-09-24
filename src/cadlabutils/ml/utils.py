@@ -326,7 +326,9 @@ def forward_pass(
     where `model(sample)` and `criterion(model(sample), target)` are both
     syntactically valid.
     """
-    print(sample.dtype, target.dtype)
+    dtypes = {p.dtype for p in model.parameters()} | {b.dtype for b in
+                                                      model.buffers()}
+    print(dtypes)
     loss = None
     if None not in (target, criterion, optimizer):
         # zero gradients
