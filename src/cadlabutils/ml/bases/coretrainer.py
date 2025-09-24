@@ -217,23 +217,9 @@ class CoreTrainer(ABC):
             self
     ):
         """Reinitialize trainable parameters."""
-        self.model = self._cfg["model"][0](**self._cfg["model"][1])
-
-        for name, param in self.model.named_parameters():
-            print("PARAM:", name, param.dtype, param.device)
-
-        for name, buf in self.model.named_buffers():
-            print("BUFFER:", name, buf.dtype, buf.device)
-
         self.model = utils.set_mode(
-            self.model, train=True, device=self.device, dtype=self.dtypes[0])
-
-        for name, param in self.model.named_parameters():
-            print("PARAM:", name, param.dtype, param.device)
-
-        for name, buf in self.model.named_buffers():
-            print("BUFFER:", name, buf.dtype, buf.device)
-
+            self._cfg["model"][0](**self._cfg["model"][1]),
+            train=True, device=self.device, dtype=self.dtypes[0])
         self.criterion = self._cfg["criterion"][0](**self._cfg["criterion"][1])
         self.optimizer = self._cfg["optimizer"][0](
             params=self.model.parameters(), **self._cfg["optimizer"][1])
