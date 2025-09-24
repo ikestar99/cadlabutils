@@ -303,6 +303,8 @@ class CoreTrainer(ABC):
         agg_loss : float
             Accuracy, averaged across all batches in `dataset`.
         """
+        torch.cuda.empty_cache()
+
         # prepare for training or inference
         self.model = utils.set_mode(
             self.model, train=train, device=self.device, dtype=self.dtypes[0])
@@ -313,6 +315,7 @@ class CoreTrainer(ABC):
             # forward pass, backpropagation, optimization, and statistics
             output, loss, target = self._step(sample, target, train=train)
             running_stats += [[loss.item(), self._step_stats(output, target)]]
+            del output, loss, target
 
         # compute statistics and clean up after epoch
         agg_loss, agg_acc = np.mean(np.array(running_stats), axis=0)
@@ -370,6 +373,7 @@ class CoreTrainer(ABC):
         self.fold, self.curve = fold, curve
         op, sc = "optimizer", "scheduler"
         epoch, t_max, v_max = 0, 0, 0
+        abar, tbar = None, None
 
         # simulate optimum batch size
         self._initialize()
@@ -393,6 +397,9 @@ class CoreTrainer(ABC):
                 return None, None
             if tree_bar is not None:
                 tree_bar.update(task_index, advance=epoch)
+                _, _, tot = utils.get_device_memory(self.device, units=3)
+                abar = tree_bar.add_task("", total=tot, label="used  GB")
+                tbar = tree_bar.add_task("", total=tot, label="total GB")
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
@@ -414,6 +421,13 @@ class CoreTrainer(ABC):
                     epoch=e, fold=fold, curve=curve)
             if tree_bar is not None:
                 tree_bar.update(task_index, advance=1)
+                a, u, tot = utils.get_device_memory(self.device, units=3)
+                tree_bar.update(abar, completed=a, total=tot)
+                tree_bar.update(tbar, completed=a + u, total=tot)
+
+        if tree_bar is not None:
+            tree_bar.remove_task(abar)
+            tree_bar.remove_task(tbar)
 
         self._make_plots()
         return t_max, v_max

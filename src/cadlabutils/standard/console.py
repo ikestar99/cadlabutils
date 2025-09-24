@@ -67,3 +67,26 @@ def elapsed_time(
     h, r = divmod(time.time() - start, 3600)
     m, s = divmod(r, 60)
     return h, m, s, f"{int(h):02}:{int(m):02}:{s:05.2f}"
+
+
+def pretty_size(
+        bytes: int
+):
+    """Convert memory in bytes to human-readable string.
+
+    Parameters
+    ----------
+    bytes : int
+        Memory in bytes.
+
+    Returns
+    -------
+    str
+        Memory as human-readable string.
+    """
+    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi"]:
+        if abs(bytes) < 1024.0:
+            return f"{bytes:3.1f} {unit}B"
+        bytes /= 1024.0
+
+    return f"{bytes:.1f} Ei{bytes}"

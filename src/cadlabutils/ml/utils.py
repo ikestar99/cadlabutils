@@ -52,6 +52,39 @@ def get_device(
     return device
 
 
+def get_device_memory(
+        device: torch.device,
+        units: int = 0
+):
+    """Report memory consumption on inference device.
+
+    TODO: add support for CPU.
+
+    Parameters
+    ----------
+    device : torch.device
+        Device on which to perform computations.
+    units : int, optional
+        Number of times to convert memory in bytes to next human readable
+        format.
+        Defaults to 0, in which case return values are in bytes.
+
+    Returns
+    -------
+    allocated : int
+        Active memory pool.
+    reserved : int
+        Reserved memory pool.
+    total : int
+        Total memory pool.
+    """
+    scalar = 1024 ** units
+    allocated = torch.cuda.memory_allocated(device) / scalar
+    reserved = torch.cuda.memory_reserved(device) / scalar
+    total = torch.cuda.get_device_properties(device).total_memory / scalar
+    return allocated, reserved, total
+
+
 def get_device_names(
 ):
     """Get the names and sizes of available CUDA devices.
