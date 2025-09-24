@@ -384,6 +384,9 @@ class CoreTrainer(ABC):
 
         # simulate optimum batch size
         if self.batch_size is None:
+            self.model = utils.set_mode(
+                self.model, train=True, device=self.device,
+                dtype=self.dtypes[0])
             self.batch_size = metrics.simulate_batch_size(
                 self.model, sample=train_dataset[0][0], device=self.device,
                 target=train_dataset[0][1], criterion=self.criterion,
