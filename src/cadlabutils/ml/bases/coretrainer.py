@@ -123,8 +123,7 @@ class CoreTrainer(ABC):
         self._cfg = {
             "model": (model, model_kwargs),
             "criterion": (criterion, criterion_kwargs or {}),
-            "optimizer": (optimizer, {
-                "lr": 1e-3, "foreach": False, **(optimizer_kwargs or {})}),
+            "optimizer": (optimizer, {"lr": 1e-3, **(optimizer_kwargs or {})}),
             "scheduler": (
                 scheduler, {"patience": 5, **(scheduler_kwargs or {})})}
 
