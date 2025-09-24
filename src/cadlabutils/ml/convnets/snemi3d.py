@@ -122,10 +122,6 @@ class ResidualModule(
         module independently of all others. The output tensors are then stacked
         back together along the z axis.
         """
-        print_module_dtypes(self.prep)
-        self.prep = self.prep.to(torch.float32)
-        print_module_dtypes(self.prep)
-
         # optional preparatory module
         x = self.prep(x) if self.prep is not None else x
 
