@@ -12,6 +12,18 @@ import torch.nn as nn
 from .. import make_block, make_dense
 
 
+def print_module_dtypes(module: torch.nn.Module):
+    print(f"Checking dtypes for {module.__class__.__name__}")
+
+    print("\nParameters:")
+    for name, param in module.named_parameters(recurse=True):
+        print(f"  {name:30} {param.dtype} {param.device}")
+
+    print("\nBuffers:")
+    for name, buf in module.named_buffers(recurse=True):
+        print(f"  {name:30} {buf.dtype} {buf.device}")
+
+
 class ResidualModule(
     nn.Module
 ):
@@ -110,6 +122,10 @@ class ResidualModule(
         module independently of all others. The output tensors are then stacked
         back together along the z axis.
         """
+        print_module_dtypes(self.prep)
+        self.prep = self.prep.to(torch.float32)
+        print_module_dtypes(self.prep)
+
         # optional preparatory module
         x = self.prep(x) if self.prep is not None else x
 
