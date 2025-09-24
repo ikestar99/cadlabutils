@@ -173,6 +173,7 @@ class CoreDataset(Dataset):
     - - - - - - - - - - - - - -
     """
     _INDEX = "_data_index"
+    trace = False
 
     def __init__(
             self,
@@ -262,8 +263,9 @@ class CoreDataset(Dataset):
         `CoreDataset.__getitem__` takes the former index system as input.
         """
         item = self.meta.iloc[[idx]].reset_index(drop=False).iloc[0]
-        print(f"\n\ncore {idx} {self.parent.__class__.__name__}\n---------------------")
-        print(item)
+        if self.trace:
+            print(f"\n\ncore {idx} {self.parent.__class__.__name__}\n---------------------")
+            print(item)
 
         item = item if self.parent is None else self.parent[item[self._INDEX]]
         return item
