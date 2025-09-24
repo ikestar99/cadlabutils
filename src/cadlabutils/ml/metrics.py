@@ -54,6 +54,8 @@ def simulate_batch_size(
         target: torch.tensor = None,
         criterion: nn.Module = None,
         optimizer: Optimizer = None,
+        sample_dtype: torch.dtype = torch.float32,
+        target_dtype: torch.dtype = torch.int64,
         start_size: int = 5,
         scalar: float = 0.75
 ):
@@ -84,6 +86,12 @@ def simulate_batch_size(
 
     Other Parameters
     ----------------
+    sample_dtype : torch.dtype, optional
+        Datatype of input sample. Should match model datatype.
+        Defaults to torch.float32, or single-precision.
+    target_dtype : torch.dtype, optional
+        Datatype of ground truth. Should match loss function.
+        Defaults to torch.int64.
     start_size : int, optional
         Known safe batch size with which to begin search.
         Defaults to 1.
@@ -120,8 +128,7 @@ def simulate_batch_size(
             _ = forward_pass(
                 model, sample=try_sample, device=device, target=try_target,
                 criterion=criterion, optimizer=optimizer,
-                sample_dtype=sample.dtype,
-                target_dtype=target.dtype if target is not None else None)
+                sample_dtype=sample_dtype, target_dtype=target_dtype)
 
             # if successful, current high becomes new low
             bs_l = bs_h

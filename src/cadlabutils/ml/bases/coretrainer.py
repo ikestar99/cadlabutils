@@ -371,10 +371,11 @@ class CoreTrainer(ABC):
         # simulate optimum batch size
         self._initialize()
         if self.batch_size is None:
-            d = [s.to(dtype=t) for s, t in zip(train_dataset[0], self.dtypes)]
+            pair = train_dataset[0]
             self.batch_size = metrics.simulate_batch_size(
-                self.model, sample=d[0], device=self.device, target=d[1],
-                criterion=self.criterion, optimizer=self.optimizer)
+                self.model, sample=pair[0], device=self.device, target=pair[1],
+                criterion=self.criterion, optimizer=self.optimizer,
+                sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
             print("Simulated batch size:", self.batch_size)
 
         # load model-specific checkpoint
