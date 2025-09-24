@@ -369,6 +369,7 @@ class CoreTrainer(ABC):
         epoch, t_max, v_max = 0, 0, 0
 
         # simulate optimum batch size
+        torch._foreach_enabled(False)
         self._initialize()
         if self.batch_size is None:
             self.batch_size = metrics.simulate_batch_size(
