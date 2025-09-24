@@ -12,7 +12,7 @@ import torch.nn as nn
 from torch.optim import Optimizer
 import torch.nn.functional as F
 
-from .utils import forward_pass
+from .utils import forward_pass, set_mode
 
 
 def count_parameters(
@@ -107,10 +107,11 @@ def simulate_batch_size(
     bs_l, bs_h = start_size, start_size
     binary_search = False
     sample = sample.unsqueeze(0)
-    model = model.to(device, dtype=sample.dtype)
     target = None if target is None else torch.tensor(target).unsqueeze(0)
 
     # loop until optimum value found
+    model = set_mode(
+        model, train=target is not None, device=device, dtype=sample_dtype)
     while True:
         # generate synthetic batch data
         try_sample = sample.expand(bs_h, *sample.shape[1:])
