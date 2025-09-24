@@ -341,6 +341,10 @@ def forward_pass(
             # backpropagation, clip gradients, optimize
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+            for p in model.parameters():
+                if p.grad is not None and p.grad.dtype != sample_dtype:
+                    p.grad.data = p.grad.data.to(sample_dtype)
+
             optimizer.step()
 
     return output, loss

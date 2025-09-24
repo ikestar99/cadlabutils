@@ -217,10 +217,9 @@ class CoreTrainer(ABC):
             self
     ):
         """Reinitialize trainable parameters."""
-        for k in ("model", "criterion"):
-            setattr(self, k, self._cfg[k][0](**self._cfg[k][1]))
-
-        self.model = self.model.to(dtype=self.dtypes[0])
+        self.model = self._cfg["model"][0](**self._cfg["model"][1]).to(
+            dtype=self.dtypes[0])
+        self.criterion = self._cfg["criterion"][0](**self._cfg["criterion"][1])
         self.optimizer = self._cfg["optimizer"][0](
             params=self.model.parameters(), **self._cfg["optimizer"][1])
         self.scheduler = self._cfg["scheduler"][0](
