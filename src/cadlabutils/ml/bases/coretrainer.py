@@ -123,7 +123,8 @@ class CoreTrainer(ABC):
         self._cfg = {
             "model": (model, model_kwargs),
             "criterion": (criterion, criterion_kwargs or {}),
-            "optimizer": (optimizer, {"lr": 1e-3, **(optimizer_kwargs or {})}),
+            "optimizer": (optimizer, {
+                "lr": 1e-3, "foreach": False, **(optimizer_kwargs or {})}),
             "scheduler": (
                 scheduler, {"patience": 5, **(scheduler_kwargs or {})})}
 
@@ -369,7 +370,6 @@ class CoreTrainer(ABC):
         epoch, t_max, v_max = 0, 0, 0
 
         # simulate optimum batch size
-        torch._foreach_enabled(False)
         self._initialize()
         if self.batch_size is None:
             self.batch_size = metrics.simulate_batch_size(
