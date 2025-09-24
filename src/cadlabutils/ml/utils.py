@@ -339,6 +339,7 @@ def forward_pass(
     if None not in (target, criterion):
         # compute loss
         target = target.to(device, non_blocking=True, dtype=target_dtype)
+        print(target.min(), target.max(), output.shape)
         loss = criterion(output, target)
         if optimizer is not None:
             # backpropagation, clip gradients, optimize
