@@ -108,7 +108,7 @@ class TreeBar(Progress):
             **kwargs
     ):
         super(TreeBar, self).__init__(  # label
-            rp.TextColumn("[bold blue]{task.fields[label]}", justify="left"),
+            rp.TextColumn("[{task.fields[color]}]{task.fields[label]}", justify="left"),
             rp.BarColumn(bar_width=None),  # progress bar
             rp.MofNCompleteColumn(),  # shows X/Y
             rp.TimeElapsedColumn(),  # total elapsed time
@@ -120,6 +120,10 @@ class TreeBar(Progress):
     ):
         for i, tabs in enumerate(self._tabs):
             pre = ""
+            color = "bold red1" if i == 0 else "green"
+            if i < len(self._tabs) - 1 and self._tabs[i+1] > tabs:
+                color = "bold cyan"
+
             for t in range(1, tabs):
                 sub = self._tabs[i + 1:]
                 if t in sub:
@@ -136,7 +140,7 @@ class TreeBar(Progress):
                 else:
                     pre += self.BTM
 
-            self.update(self._ids[i], label=f"{pre}{self._desc[i]}")
+            self.update(self._ids[i], label=f"{pre}{self._desc[i]}", color=color)
 
     def add_task(
             self,
@@ -145,7 +149,8 @@ class TreeBar(Progress):
             **kwargs
     ):
         tabs = max(self._tabs) if tabs == "max" else tabs
-        task_id = super(TreeBar, self).add_task("", label=label, **kwargs)
+        task_id = super(TreeBar, self).add_task(
+            "", label=label, color="green", **kwargs)
         self._ids += [task_id]
         self._tabs += [tabs]
         self._desc += [label]
@@ -156,8 +161,8 @@ class TreeBar(Progress):
             self,
             task_id
     ):
-        super(TreeBar, self).remove_task(task_id)
         idx = self._ids.index(task_id)
+        super(TreeBar, self).remove_task(task_id)
         self._ids.pop(idx)
         self._tabs.pop(idx)
         self._desc.pop(idx)

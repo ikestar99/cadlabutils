@@ -6,7 +6,6 @@ Created on Wed Aug 06 09:00:00 2025
 """
 
 
-import psutil
 import torch
 import torch.nn as nn
 import torch.cuda as cuda
