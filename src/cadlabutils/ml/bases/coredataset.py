@@ -94,16 +94,17 @@ class CoreDataset(Dataset):
 
     Rich print instance data.
     >>> print(t_dataset)  # doctest: +NORMALIZE_WHITESPACE
-    ┏━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━┓
-    ┃ day ┃ count ┃ head ┃ tail ┃
-    ┡━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━┩
-    │ Mon │ 1     │ 1    │ 0    │
-    │ Mon │ 2     │ 1    │ 0    │
-    │ Mon │ 3     │ 1    │ 0    │
-    │ Mon │ 4     │ 0    │ 1    │
-    │ Mon │ 6     │ 0    │ 1    │
-    │ Mon │ 8     │ 0    │ 1    │
-    └─────┴───────┴──────┴──────┘
+    ┏━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+    ┃ day ┃ count ┃ class: head ┃ class: tail ┃
+    ┡━━━━━╇━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+    │ Mon │ 1     │ 1           │ 0           │
+    │ Mon │ 2     │ 1           │ 0           │
+    │ Mon │ 3     │ 1           │ 0           │
+    │ Mon │ 4     │ 0           │ 1           │
+    │ Mon │ 6     │ 0           │ 1           │
+    │ Mon │ 8     │ 0           │ 1           │
+    │     │       │ 3           │ 3           │
+    └─────┴───────┴─────────────┴─────────────┘
 
     Get all values of metadata variable.
     >>> t_dataset.get_metadata("label")
@@ -338,6 +339,17 @@ class CoreDataset(Dataset):
                     c for c in table.index.names if c != self.truth_var],
                 columns=self.truth_var, values=self._INDEX, aggfunc="count",
                 fill_value=0, observed=True).reset_index()
+            table.columns = [
+                c if c in self.meta.index.names else f"class: {c}"
+                for c in table.columns]
+            count_cols = [
+                c for c in table.columns if c not in self.meta.index.names]
+            rem_cols = [
+                c for c in table.columns if c in self.meta.index.names]
+            totals = table[count_cols].sum().to_frame().T
+            totals[rem_cols] = ""  # leading columns empty
+            table = pd.concat(
+                [table, totals[table.columns]], ignore_index=True)
 
         console = cdu.Console()
         with console.capture() as capture:
