@@ -455,4 +455,5 @@ class CoreTrainer(ABC):
 
         self._make_plots()
         del self.model, self.criterion, self.optimizer, self.scheduler
+        torch.cuda.empty_cache()
         return t_max, v_max
