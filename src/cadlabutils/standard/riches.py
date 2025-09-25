@@ -139,9 +139,9 @@ class TreeBar(Progress):
                 else:
                     pre += self.BTM
 
-            color = "bold red1" if i == 0 else color
             self.update(
-                self._ids[i], label=f"{pre}{self._desc[i]}", color=color)
+                self._ids[i], label=f"{pre}{self._desc[i]}",
+                color="bold red1" if i == 0 else color)
 
     def add_task(
             self,

@@ -231,23 +231,21 @@ class CoreTrainer(ABC):
         if self._BAR is None:
             return
 
-        cpu_use, cpu_tot = cdu.get_cpu_memory(scale=2)
+        c_u, c_t = cdu.get_cpu_memory(scale=2)
         self._CPU = (
-            self._BAR.add_task("CPU use (MiB)", tabs="max", total=cpu_tot)
+            self._BAR.add_task("CPU use (MiB)", tabs=0, total=c_t)
             if self._CPU is None else self._CPU)
-        self._BAR.update(self._CPU, completed=cpu_use)
+        self._BAR.update(self._CPU, completed=c_u)
         if self. device.type == "cpu":
             return
 
-        gpu_use, gpu_res, gpu_tot = utils.get_cuda_memory(self.device)
-        self._GPU = (
-            self._BAR.add_task("GPU use (GiB)", tabs="max", total=gpu_tot)
-            if self._GPU is None else self._GPU)
-        self._BAR.update(self._CPU, completed=cpu_use)
-        self._GPR = (
-            self._BAR.add_task("GPU res (GiB)", tabs="max", total=gpu_tot)
-            if self._GPR is None else self._GPR)
-        self._BAR.update(self._GPR, completed=cpu_res)
+        g_u, g_r, g_t = utils.get_cuda_memory(self.device)
+        if self._GPU is None:
+            self._GPU = self._BAR.add_task("GPU use (GiB)", tabs=1, total=g_t)
+            self._GPR = self._BAR.add_task("GPU res (GiB)", tabs=1, total=g_t)
+
+        self._BAR.update(self._CPU, completed=c_u)
+        self._BAR.update(self._GPR, completed=g_r)
 
     def _initialize(
             self
@@ -351,6 +349,7 @@ class CoreTrainer(ABC):
             # forward pass, backpropagation, optimization, and statistics
             output, loss, target = self._step(sample, target, train=train)
             running_stats += [[loss.item(), self._step_stats(output, target)]]
+            self._track_memory()
             del output, loss, target
 
         # compute statistics and clean up after epoch
