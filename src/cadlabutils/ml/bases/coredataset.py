@@ -323,9 +323,10 @@ class CoreDataset(Dataset):
         str
             Summary table of stored samples per metadata combination.
         """
-        console = cdu.Console(record=True)
-        console.print(cdu.get_rich_table(self.summarize()))
-        return console.export_text()
+        console = cdu.Console()
+        with console.capture() as capture:
+            console.print(cdu.get_rich_table(self.summarize()))
+            return capture.get()
 
     def __rich_console__(
             self
