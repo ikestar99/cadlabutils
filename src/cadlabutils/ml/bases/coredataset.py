@@ -13,6 +13,8 @@ from pathlib import Path
 from torch.utils.data import Dataset
 from sklearn.model_selection import StratifiedGroupKFold
 
+import cadlabutils as cdu
+
 
 class CoreDataset(Dataset):
     """Store mapping between hierarchical metadata and data indices.
@@ -311,6 +313,33 @@ class CoreDataset(Dataset):
         self.meta = (self + other).meta
         return self
 
+    def __str__(
+            self
+    ):
+        """Get string representation of instance.
+
+        Returns
+        -------
+        str
+            Summary table of stored samples per metadata combination.
+        """
+        console = cdu.Console(record=True)
+        console.print(cdu.get_rich_table(self.summarize()))
+        return console.export_text()
+
+    def __rich_console__(
+            self
+    ):
+        """Get rich console output for instance.
+
+        Returns
+        -------
+        cdu.Table
+            Summary table of stored samples per metadata combination.
+        """
+        table = cdu.get_rich_table(self.summarize())
+        yield table
+
     def _save(
             self,
             meta_csv: Path
@@ -350,14 +379,15 @@ class CoreDataset(Dataset):
 
     def summarize(
             self,
-            meta_var: str | list[str]
+            meta_var: str | list[str] = None
     ):
         """Summarize distribution of metadata values.
 
         Parameters
         ----------
-        meta_var : str | list[str]
+        meta_var : str | list[str], optional
             Name of metadata variable(s) to summarize.
+            Defaults to None, in which case all variables are summarized.
 
         Returns
         -------
@@ -366,6 +396,7 @@ class CoreDataset(Dataset):
             combination of metadata values, and the count of all samples with
             each combination in "count" column.
         """
+        meta_var = self.meta.index.names if meta_var is None else meta_var
         meta_var = [meta_var] if isinstance(meta_var, str) else meta_var
         summary = self.meta.copy().reset_index(drop=False)[meta_var]
         summary = summary.groupby(

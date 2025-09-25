@@ -6,11 +6,12 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
-from rich.tree import Tree
-from rich.console import Console
-from rich.progress import Progress
-
+import pandas as pd
 import rich.progress as rp
+
+from rich.tree import Tree
+from rich.table import Table
+from rich.console import Console
 
 
 def pbar(
@@ -38,6 +39,61 @@ def pbar(
     """
     bar = rp.track(item, description=f"{" " * 4 * tabs}{desc}")
     return bar
+
+
+def get_rich_table(
+        df: pd.DataFrame
+):
+    """Convert any dataframe to a rich table.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Dataframe to convert. May include multiindices.
+
+    Returns
+    -------
+    table : Table
+        Rich table.
+
+    Examples
+    --------
+    >>> test_col = pd.MultiIndex.from_arrays(
+    ...     [["A", "A", "B"], ["x", "y", "x"]], names=("group", "var"))
+    >>> test_index = pd.MultiIndex.from_arrays(
+    ...     [["one", "one", "two"], ["X", "Y", "X"]], names=("out", "in"))
+    >>> test_df = pd.DataFrame(
+    ...     [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+    ...     index=test_index, columns=test_col)
+    >>> test_table = get_rich_table(test_df)
+    >>> Console(force_terminal=False).print(test_table)
+    ┏━━━━━┳━━━━┳━━━┳━━━┳━━━┓
+    ┃     ┃    ┃ A ┃ A ┃ B ┃
+    ┃ out ┃ in ┃ x ┃ y ┃ x ┃
+    ┡━━━━━╇━━━━╇━━━╇━━━╇━━━┩
+    │ one │ X  │ 1 │ 2 │ 3 │
+    │ one │ Y  │ 4 │ 5 │ 6 │
+    │ two │ X  │ 7 │ 8 │ 9 │
+    └─────┴────┴───┴───┴───┘
+    """
+    # Flatten column MultiIndex
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df.copy()
+        df.columns = [
+            "\n".join([str(c) for c in col if c is not None])
+            for col in df.columns]
+
+    # Reset row MultiIndex if present
+    df = df.reset_index(
+        drop=False) if isinstance(df.index, pd.MultiIndex) else df
+    table = Table(show_header=True, header_style="bold magenta")
+    for col in df.columns:
+        table.add_column(str(col))
+
+    for _, row in df.iterrows():
+        table.add_row(*[str(x) for x in row.tolist()])
+
+    return table
 
 
 def print_rich_tree(
@@ -97,7 +153,7 @@ def print_rich_tree(
     Console(force_terminal=color).print(tree)
 
 
-class TreeBar(Progress):
+class TreeBar(rp.Progress):
     TAB = "    "
     DWN = "|   "
     FRK = "├── "
@@ -107,13 +163,15 @@ class TreeBar(Progress):
             self,
             **kwargs
     ):
+        template = "[bold white]{task.fields[elbow]}"
+        template += "[{task.fields[color]}]{task.fields[label]}"
         super(TreeBar, self).__init__(  # label
-            rp.TextColumn("[{task.fields[color]}]{task.fields[label]}", justify="left"),
+            rp.TextColumn(template, justify="left"),
             rp.BarColumn(bar_width=None),  # progress bar
             rp.MofNCompleteColumn(),  # shows X/Y
             rp.TimeElapsedColumn(),  # total elapsed time
             **kwargs)
-        self._ids, self._tabs, self._desc = [], [], []
+        self._ids, self._tabs = [], []
 
     def _update_tree(
             self
@@ -140,7 +198,7 @@ class TreeBar(Progress):
                     pre += self.BTM
 
             self.update(
-                self._ids[i], label=f"{pre}{self._desc[i]}",
+                self._ids[i], elbow=pre,
                 color="bold red1" if tabs == 0 else color)
 
     def add_task(
@@ -151,10 +209,9 @@ class TreeBar(Progress):
     ):
         tabs = max(self._tabs) if tabs == "max" else tabs
         task_id = super(TreeBar, self).add_task(
-            "", label=label, color="green", **kwargs)
+            "", elbow="", label=label, color="green", **kwargs)
         self._ids += [task_id]
         self._tabs += [tabs]
-        self._desc += [label]
         self._update_tree()
         return task_id
 
@@ -166,5 +223,4 @@ class TreeBar(Progress):
         super(TreeBar, self).remove_task(task_id)
         self._ids.pop(idx)
         self._tabs.pop(idx)
-        self._desc.pop(idx)
         self._update_tree()
