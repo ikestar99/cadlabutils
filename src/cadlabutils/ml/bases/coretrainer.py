@@ -231,15 +231,15 @@ class CoreTrainer(ABC):
         if self._BAR is None:
             return
 
-        c_u, c_t = cdu.get_cpu_memory(scale=2)
+        c_u, c_t = cdu.get_cpu_memory(scale=3)
         self._CPU = (
-            self._BAR.add_task("CPU use (MiB)", tabs=0, total=c_t)
+            self._BAR.add_task("CPU use (GiB)", tabs=0, total=c_t)
             if self._CPU is None else self._CPU)
         self._BAR.update(self._CPU, completed=c_u)
         if self. device.type == "cpu":
             return
 
-        g_u, g_r, g_t = utils.get_cuda_memory(self.device)
+        g_u, g_r, g_t = utils.get_cuda_memory(self.device, scale=3)
         if self._GPU is None:
             self._GPU = self._BAR.add_task("GPU use (GiB)", tabs=1, total=g_t)
             self._GPR = self._BAR.add_task("GPU res (GiB)", tabs=1, total=g_t)
@@ -444,7 +444,8 @@ class CoreTrainer(ABC):
             t_max = max(t_acc, t_max)
             v_max = max(v_acc, v_max)
             if self._BAR is not None:
-                pbar.update(epoch_task, completed=e + 1)
+                delta = epoch if e == epoch and e != 0 else 0
+                pbar.update(epoch_task, advance=1 + delta)
             if v_acc >= v_max:
                 utils.save(
                     self.model_path, self.model,
