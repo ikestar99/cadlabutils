@@ -12,6 +12,10 @@ import rich.progress as rp
 from rich.tree import Tree
 from rich.table import Table
 from rich.console import Console
+from rich.traceback import install
+
+
+install(show_locals=True, width=120)
 
 
 def pbar(
