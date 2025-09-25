@@ -98,13 +98,67 @@ def print_rich_tree(
 
 
 class TreeBar(Progress):
+    TAB = "    "
+    DWN = "|   "
+    FRK = "├── "
+    BTM = "└── "
+
     def __init__(
             self,
             **kwargs
     ):
-        super().__init__(  # label
+        super(TreeBar, self).__init__(  # label
             rp.TextColumn("[bold blue]{task.fields[label]}", justify="left"),
             rp.BarColumn(bar_width=None),  # progress bar
             rp.MofNCompleteColumn(),  # shows X/Y
             rp.TimeElapsedColumn(),  # total elapsed time
             **kwargs)
+        self._ids, self._tabs, self._desc = [], [], []
+
+    def _update_tree(
+            self
+    ):
+        for i, tabs in enumerate(self._tabs):
+            pre = ""
+            for t in range(1, tabs):
+                sub = self._tabs[i + 1:]
+                if t in sub:
+                    pre += self.DWN if min(
+                        sub[:sub.index(t) + 1]) == t else self.TAB
+                else:
+                    pre += self.TAB
+
+            if tabs > 0:
+                sub = self._tabs[i + 1:]
+                if tabs in sub:
+                    pre += self.FRK if min(
+                        sub[:sub.index(tabs) + 1]) >= tabs else self.BTM
+                else:
+                    pre += self.BTM
+
+            self.update(self._ids[i], label=f"{pre}{self._desc[i]}")
+
+    def add_task(
+            self,
+            label: str,
+            tabs: int | str = 0,
+            **kwargs
+    ):
+        tabs = max(self._tabs) if tabs == "max" else tabs
+        task_id = super(TreeBar, self).add_task("", label=label, **kwargs)
+        self._ids += [task_id]
+        self._tabs += [tabs]
+        self._desc += [label]
+        self._update_tree()
+        return task_id
+
+    def remove_task(
+            self,
+            task_id
+    ):
+        super(TreeBar, self).remove_task(task_id)
+        idx = self._ids.index(task_id)
+        self._ids.pop(idx)
+        self._tabs.pop(idx)
+        self._desc.pop(idx)
+        self._update_tree()

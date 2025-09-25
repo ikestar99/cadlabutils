@@ -98,6 +98,7 @@ class CoreTrainer(ABC):
     {"patience": dummy_epochs} where `dummy_epochs` is an integer larger than
     the number of epochs planned during training.
     """
+    _BAR, _CPU, _GPU, _GPR = None, None, None, None
 
     def __init__(
             self,
@@ -118,7 +119,6 @@ class CoreTrainer(ABC):
         self.dtypes = dtypes
         self.model_path = out_dir.joinpath("model.safetensors")
         self.fold, self.curve, self.batch_size = 0, 0, None
-        self._tree_bar, self._abar, self._tbar = None, None, None
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
@@ -213,6 +213,41 @@ class CoreTrainer(ABC):
         Generate plot of statistics saved during training.
         """
         pass
+
+    def _track_memory(
+            self
+    ):
+        """Track resource consumption on CPU and CUDA device if available.
+
+        See Also
+        --------
+        cadlabutils.TreeBar
+
+        Notes
+        -----
+        Depends on class attribute `_BAR`, which is a `Treebar` instance set
+        during the training loop.
+        """
+        if self._BAR is None:
+            return
+
+        cpu_use, cpu_tot = cdu.get_cpu_memory(scale=2)
+        self._CPU = (
+            self._BAR.add_task("CPU use (MiB)", tabs="max", total=cpu_tot)
+            if self._CPU is None else self._CPU)
+        self._BAR.update(self._CPU, completed=cpu_use)
+        if self. device.type == "cpu":
+            return
+
+        gpu_use, gpu_res, gpu_tot = utils.get_cuda_memory(self.device)
+        self._GPU = (
+            self._BAR.add_task("GPU use (GiB)", tabs="max", total=gpu_tot)
+            if self._GPU is None else self._GPU)
+        self._BAR.update(self._CPU, completed=cpu_use)
+        self._GPR = (
+            self._BAR.add_task("GPU res (GiB)", tabs="max", total=gpu_tot)
+            if self._GPR is None else self._GPR)
+        self._BAR.update(self._GPR, completed=cpu_res)
 
     def _initialize(
             self
@@ -317,10 +352,6 @@ class CoreTrainer(ABC):
             output, loss, target = self._step(sample, target, train=train)
             running_stats += [[loss.item(), self._step_stats(output, target)]]
             del output, loss, target
-            if self.tree_bar is not None:
-                a, u, tot = utils.get_device_memory(self.device, units=3)
-                self.tree_bar.update(self._abar, completed=a)
-                self.tree_bar.update(self._tbar, completed=a + u)
 
         # compute statistics and clean up after epoch
         agg_loss, agg_acc = np.mean(np.array(running_stats), axis=0)
@@ -336,8 +367,8 @@ class CoreTrainer(ABC):
         epochs: int,
         fold: int = 0,
         curve: int = 0,
-        tree_bar: cdu.Progress = None,
-        task_index: cdu.rp.TaskID = 0
+        pbar: cdu.TreeBar = None,
+        epoch_task: cdu.rp.TaskID = None
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -368,14 +399,14 @@ class CoreTrainer(ABC):
 
         Other Parameters
         ----------------
-        tree_bar : cdu.Progress, optional
+        pbar : cdu.TreeBar, optional
             Progress bar displaying current epoch information.
             Defaults to None, in which case no epoch progress bar is displayed.
-        task_index : str, optional
+        epoch_task : cdu.rp.TaskID, optional
             Index of epoch progress bar in `tree_bar`.
-            Defaults to 'epoch'.
+            Defaults to None.
         """
-        self.fold, self.curve = fold, curve
+        self.fold, self.curve, self._BAR = fold, curve, pbar
         op, sc = "optimizer", "scheduler"
         epoch, t_max, v_max = 0, 0, 0
 
@@ -400,15 +431,6 @@ class CoreTrainer(ABC):
             if extras["fold"] < fold or extras["curve"] < curve:
                 return None, None
 
-        if tree_bar is not None:
-            self.tree_bar = tree_bar
-            _, _, tot = utils.get_device_memory(self.device, units=3)
-            if self._abar is None:
-                self._abar = tree_bar.add_task("", total=tot, label="used  GB")
-                self._tbar = tree_bar.add_task("", total=tot, label="total GB")
-            if epoch != 0:
-                tree_bar.update(task_index, advance=epoch)
-
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
@@ -422,13 +444,13 @@ class CoreTrainer(ABC):
             self.scheduler.step(v_loss)
             t_max = max(t_acc, t_max)
             v_max = max(v_acc, v_max)
+            if self._BAR is not None:
+                pbar.update(epoch_task, completed=e + 1)
             if v_acc >= v_max:
                 utils.save(
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
                     epoch=e, fold=fold, curve=curve)
-            if self.tree_bar is not None:
-                tree_bar.update(task_index, advance=1)
 
         self._make_plots()
         return t_max, v_max

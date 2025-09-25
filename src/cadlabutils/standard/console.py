@@ -8,6 +8,7 @@ Created on Wed Jan 22 09:00:00 2025
 
 import os
 import time
+import psutil
 import platform
 
 from datetime import datetime
@@ -70,13 +71,13 @@ def elapsed_time(
 
 
 def pretty_size(
-        bytes: int
+        memory: int
 ):
     """Convert memory in bytes to human-readable string.
 
     Parameters
     ----------
-    bytes : int
+    memory : int
         Memory in bytes.
 
     Returns
@@ -85,8 +86,33 @@ def pretty_size(
         Memory as human-readable string.
     """
     for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi"]:
-        if abs(bytes) < 1024.0:
-            return f"{bytes:3.1f} {unit}B"
-        bytes /= 1024.0
+        if abs(memory) < 1024.0:
+            return f"{memory:3.1f} {unit}B"
+        memory /= 1024.0
 
-    return f"{bytes:.1f} Ei{bytes}"
+    return f"{memory:.1f} Ei{memory}"
+
+
+def get_cpu_memory(
+        scale: int = 0
+):
+    """Report memory consumption on CPU.
+
+    Parameters
+    ----------
+    scale : int, optional
+        Scale memory in bytes to a power of 2^10.
+        Defaults to 0, in which case returned memories are in bytes.
+
+    Returns
+    -------
+    allocated : int
+        Active memory pool.
+    total : int
+        Total memory pool.
+    """
+    scalar = 1024 ** scale
+    vm = psutil.virtual_memory()
+    allocated = (vm.total - vm.available) / scalar
+    total = vm.total / scalar
+    return allocated, total

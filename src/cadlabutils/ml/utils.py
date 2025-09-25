@@ -6,6 +6,7 @@ Created on Wed Aug 06 09:00:00 2025
 """
 
 
+import psutil
 import torch
 import torch.nn as nn
 import torch.cuda as cuda
@@ -52,22 +53,19 @@ def get_device(
     return device
 
 
-def get_device_memory(
+def get_cuda_memory(
         device: torch.device,
-        units: int = 0
+        scale: int = 0
 ):
-    """Report memory consumption on inference device.
-
-    TODO: add support for CPU.
+    """Report memory consumption on cuda-enabled inference device.
 
     Parameters
     ----------
     device : torch.device
-        Device on which to perform computations.
-    units : int, optional
-        Number of times to convert memory in bytes to next human readable
-        format.
-        Defaults to 0, in which case return values are in bytes.
+        CUDA device for which to profile memory usage.
+    scale : int, optional
+        Scale memory in bytes to a power of 2^10.
+        Defaults to 0, in which case returned memories are in bytes.
 
     Returns
     -------
@@ -77,8 +75,16 @@ def get_device_memory(
         Reserved memory pool.
     total : int
         Total memory pool.
+
+    Raises
+    ------
+    ValueError
+        Passed device is not cuda enabled.
     """
-    scalar = 1024 ** units
+    scalar = 1024 ** scale
+    if device.type == "cpu" or not torch.cuda.is_available():
+        raise ValueError("Passed device is not cuda enabled.")
+
     allocated = torch.cuda.memory_allocated(device) / scalar
     reserved = torch.cuda.memory_reserved(device) / scalar
     total = torch.cuda.get_device_properties(device).total_memory / scalar

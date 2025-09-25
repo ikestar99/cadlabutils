@@ -14,10 +14,11 @@ authors = [
 dependencies = [
   "numpy",
   "pandas",
+  "psutil",
   "pyarrow",
-  "scipy",
   "matplotlib",
   "rich",
+  "scipy",
 ]
 
 [project.optional-dependencies]
