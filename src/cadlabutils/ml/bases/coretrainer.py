@@ -454,4 +454,5 @@ class CoreTrainer(ABC):
                     epoch=e, fold=fold, curve=curve)
 
         self._make_plots()
+        del self.model, self.criterion, self.optimizer, self.scheduler
         return t_max, v_max
