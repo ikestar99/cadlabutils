@@ -79,7 +79,8 @@ class CoreDataset(Dataset):
     Instantiate with 3 metadata variables.
     >>> # arbitrary metadata values, including constants and lists
     >>> metadata = {
-    ... "day": "Mon", "label": ["head", "tail"], "count": [3, 6, 1, 4, 2, 8]}
+    ... "day": "Mon", "label": ["head", "tail"], "count": [3, 6, 1, 4, 2, 8],
+    ... "truth_var": "label"}
     >>> t_dataset = CoreDataset(len(metadata["count"]), **metadata)
     >>> t_dataset.meta  # doctest: +NORMALIZE_WHITESPACE
                      _data_index
@@ -91,11 +92,18 @@ class CoreDataset(Dataset):
               6                1
               8                5
 
-    Summarize metadata distribution.
-    >>> t_dataset.summarize(["day", "label"])  # doctest: +NORMALIZE_WHITESPACE
-       day label  count
-    0  Mon  head      3
-    1  Mon  tail      3
+    Rich print instance data.
+    >>> print(t_dataset)  # doctest: +NORMALIZE_WHITESPACE
+    ┏━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━┓
+    ┃ day ┃ count ┃ head ┃ tail ┃
+    ┡━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━┩
+    │ Mon │ 1     │ 1    │ 0    │
+    │ Mon │ 2     │ 1    │ 0    │
+    │ Mon │ 3     │ 1    │ 0    │
+    │ Mon │ 4     │ 0    │ 1    │
+    │ Mon │ 6     │ 0    │ 1    │
+    │ Mon │ 8     │ 0    │ 1    │
+    └─────┴───────┴──────┴──────┘
 
     Get all values of metadata variable.
     >>> t_dataset.get_metadata("label")
@@ -323,12 +331,13 @@ class CoreDataset(Dataset):
         str
             Summary table of stored samples per metadata combination.
         """
-        table = self.summarize()
+        table = self.meta
         if self.truth_var is not None:
-            table = pd.concat([
-                table[table["count"] == u].drop(self.truth_var, axis=1).rename(
-                    columns={"count": u})
-                for u in table[self.truth_var].unique()], axis=1)
+            table = table.pivot_table(
+                index=[
+                    c for c in table.index.names if c != self.truth_var],
+                columns=self.truth_var, values=self._INDEX, aggfunc="count",
+                fill_value=0, observed=True).reset_index()
 
         console = cdu.Console()
         with console.capture() as capture:
@@ -372,32 +381,6 @@ class CoreDataset(Dataset):
             truth_var=self.truth_var,
             _parent=self if self.parent is None else self.parent)
         return subset
-
-    def summarize(
-            self,
-            meta_var: str | list[str] = None
-    ):
-        """Summarize distribution of metadata values.
-
-        Parameters
-        ----------
-        meta_var : str | list[str], optional
-            Name of metadata variable(s) to summarize.
-            Defaults to None, in which case all variables are summarized.
-
-        Returns
-        -------
-        summary : pd.DataFrame
-            Has a column for each variable in `meta_var`, a row for each unique
-            combination of metadata values, and the count of all samples with
-            each combination in "count" column.
-        """
-        meta_var = self.meta.index.names if meta_var is None else meta_var
-        meta_var = [meta_var] if isinstance(meta_var, str) else meta_var
-        summary = self.meta.copy().reset_index(drop=False)[meta_var]
-        summary = summary.groupby(
-            meta_var, observed=True).size().reset_index(name="count")
-        return summary
 
     def get_metadata(
             self,
