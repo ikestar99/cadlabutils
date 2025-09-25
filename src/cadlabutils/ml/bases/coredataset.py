@@ -326,7 +326,8 @@ class CoreDataset(Dataset):
         console = cdu.Console()
         with console.capture() as capture:
             console.print(cdu.get_rich_table(self.summarize()))
-            return capture.get()
+
+        return capture.get()
 
     def __rich_console__(
             self
