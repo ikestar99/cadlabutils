@@ -141,7 +141,7 @@ class TreeBar(Progress):
 
             self.update(
                 self._ids[i], label=f"{pre}{self._desc[i]}",
-                color="bold red1" if i == 0 else color)
+                color="bold red1" if tabs == 0 else color)
 
     def add_task(
             self,
