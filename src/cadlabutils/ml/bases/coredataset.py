@@ -326,7 +326,8 @@ class CoreDataset(Dataset):
         table = self.summarize()
         if self.truth_var is not None:
             table = pd.concat([
-                table[table["count"] == u]
+                table[table["count"] == u].drop(self.truth_var, axis=1).rename(
+                    columns={"count": u})
                 for u in table[self.truth_var].unique()], axis=1)
 
         console = cdu.Console()
