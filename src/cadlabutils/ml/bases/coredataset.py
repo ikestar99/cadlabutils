@@ -323,24 +323,17 @@ class CoreDataset(Dataset):
         str
             Summary table of stored samples per metadata combination.
         """
+        table = self.summarize()
+        if self.truth_var is not None:
+            table = pd.concat([
+                table[table["count"] == u]
+                for u in table[self.truth_var].unique()], axis=1)
+
         console = cdu.Console()
         with console.capture() as capture:
-            console.print(cdu.get_rich_table(self.summarize()))
+            console.print(cdu.get_rich_table(table))
 
         return capture.get()
-
-    def __rich_console__(
-            self
-    ):
-        """Get rich console output for instance.
-
-        Returns
-        -------
-        cdu.Table
-            Summary table of stored samples per metadata combination.
-        """
-        table = cdu.get_rich_table(self.summarize())
-        yield table
 
     def _save(
             self,
