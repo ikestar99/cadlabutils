@@ -453,4 +453,10 @@ class CoreTrainer(ABC):
                     epoch=e, fold=fold, curve=curve)
 
         self._make_plots()
+        if self._BAR is not None:
+            check = [
+                t for t in (self._CPU, self._GPU, self._GPR) if t is not None]
+            for t in check:
+                pbar.remove_task(t)
+
         return t_max, v_max

@@ -119,8 +119,7 @@ class TreeBar(Progress):
             self
     ):
         for i, tabs in enumerate(self._tabs):
-            pre = ""
-            color = "bold red1" if i == 0 else "green"
+            pre, color = "", "green"
             if i < len(self._tabs) - 1 and self._tabs[i+1] > tabs:
                 color = "bold cyan"
 
@@ -140,7 +139,9 @@ class TreeBar(Progress):
                 else:
                     pre += self.BTM
 
-            self.update(self._ids[i], label=f"{pre}{self._desc[i]}", color=color)
+            color = "bold red1" if i == 0 else color
+            self.update(
+                self._ids[i], label=f"{pre}{self._desc[i]}", color=color)
 
     def add_task(
             self,
