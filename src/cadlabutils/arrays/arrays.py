@@ -174,7 +174,8 @@ def min_max_scaling(
 
 
 def dtype_norm(
-        arr: np.ndarray
+        arr: np.ndarray,
+        offset: float = None
 ):
     """Normalize array to max value allowed by dtype.
 
@@ -182,6 +183,9 @@ def dtype_norm(
     ----------
     arr : np.ndarray
         Array to normalize.
+    offset : float, optional
+        Subtract normalized reference value from scaled array.
+        Defaults to None, in which case no offset is performed.
 
     Returns
     -------
@@ -212,6 +216,7 @@ def dtype_norm(
     try:
         peak = max(abs(info(arr.dtype).min), info(arr.dtype).max)
         normed = arr / peak
+        normed = normed - (offset / peak) if offset is not None else normed
         return normed
     except ValueError:
         raise NotImplementedError(f"Cannot normalize {arr.dtype} array.")
