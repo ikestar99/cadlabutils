@@ -36,7 +36,8 @@ def current_date_time(
 
 
 def elapsed_time(
-        start: float
+        start: float,
+        is_elapsed: bool = False
 ):
     """Calculate elapsed time in hours, minutes, seconds.
 
@@ -44,6 +45,10 @@ def elapsed_time(
     ----------
     start : float
         Start time in seconds.
+    is_elapsed : bool, optional
+        If True, interpret `start` as elapsed time.
+        Defaults to False, in which case elapsed time is current time -
+        `start`.
 
     Returns
     -------
@@ -58,16 +63,21 @@ def elapsed_time(
 
     Examples
     --------
-    Convert seconds to elapsed time.
+    Convert start time to elapsed time.
     >>> test_start = time.time()
     >>> time.sleep(1)
     >>> _, _, _, test_str = elapsed_time(test_start)
     >>> test_str
-    '00:00:01.01'
+    '00:00:01'
+
+    Convert elapsed time to elapsed time string.
+    >>> _, _, _, test_str = elapsed_time(3666, is_elapsed=True)
+    >>> test_str
+    '01:01:06'
     """
-    h, r = divmod(time.time() - start, 3600)
+    h, r = divmod(start if is_elapsed else (time.time() - start), 3600)
     m, s = divmod(r, 60)
-    return h, m, s, f"{int(h):02}:{int(m):02}:{s:05.2f}"
+    return h, m, s, f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
 
 
 def pretty_size(

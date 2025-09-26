@@ -6,13 +6,17 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
+import time
 import pandas as pd
 import rich.progress as rp
 
+from rich.text import Text
 from rich.tree import Tree
 from rich.table import Table
 from rich.console import Console
 from rich.traceback import install
+
+from .console import elapsed_time
 
 
 install(show_locals=True, width=120)
@@ -157,6 +161,24 @@ def print_rich_tree(
     Console(force_terminal=color).print(tree)
 
 
+class TimeSpeedColumn(rp.ProgressColumn):
+    """Custom column: show elapsed time and speed, blank if show_time=False."""
+
+    def render(self, task: rp.Task) -> Text:
+        # Default to False if field is missing
+        show_time = task.fields.get("show_time", True)
+        if not show_time:
+            return Text("")
+
+        if task.start_time is None:
+            return Text("-:--:-- 0.00 it/s", style="progress.elapsed")
+
+        elapsed = time.perf_counter() - task.start_time
+        speed = (task.completed / elapsed) if elapsed > 0 else 0.0
+        _, _, _, e_str = elapsed_time(elapsed, is_elapsed=True)
+        return Text(f"{e_str} {speed:5.2f} it/s", style="progress.elapsed")
+
+
 class TreeBar(rp.Progress):
     TAB = "    "
     DWN = "|   "
@@ -173,7 +195,8 @@ class TreeBar(rp.Progress):
             rp.TextColumn(template, justify="left"),
             rp.BarColumn(bar_width=None),  # progress bar
             rp.MofNCompleteColumn(),  # shows X/Y
-            rp.TimeElapsedColumn(),  # total elapsed time
+            TimeSpeedColumn(),
+            # rp.TimeElapsedColumn(),  # total elapsed time
             **kwargs)
         self._ids, self._tabs = [], []
 
