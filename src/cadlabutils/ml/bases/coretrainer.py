@@ -452,13 +452,12 @@ class CoreTrainer(ABC):
             if self._BAR is not None:
                 label = f"{len(train_loader)} batches of {self.batch_size}"
                 pbar.start_task(task_id)
-                pbar.update(task_id, label=label, completed=epoch + 1)
+                pbar.update(task_id, label=label, completed=e + 1)
             if v_acc >= v_max:  # save model if peak validation performance
                 utils.save(
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
                     epoch=e, fold=fold, curve=curve)
-            print(f"{fold}-{curve}-{e}")
 
         self._make_plots()
         del self.model, self.criterion, self.optimizer, self.scheduler

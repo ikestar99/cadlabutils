@@ -163,20 +163,23 @@ def print_rich_tree(
 
 class TimeSpeedColumn(rp.ProgressColumn):
     """Custom column: show elapsed time and speed, blank if show_time=False."""
+    _NUL = "-:--:-- -.-- it/s"
 
     def render(self, task: rp.Task) -> Text:
-        # Default to False if field is missing
-        show_time = task.fields.get("show_time", True)
-        if not show_time:
+        if not task.fields.get("show_time", True):
             return Text("")
-
-        if task.start_time is None:
-            return Text("-:--:-- 0.00 it/s", style="progress.elapsed")
+        elif task.start_time is None:
+            return Text(self._NUL, style="progress.elapsed")
+        elif task.finished:
+            return Text(
+                task.fields.get("e_str", self._NUL), style="progress.elapsed")
 
         elapsed = time.perf_counter() - task.start_time
         speed = (task.completed / elapsed) if elapsed > 0 else 0.0
-        _, _, _, e_str = elapsed_time(elapsed, is_elapsed=True)
-        return Text(f"{e_str} {speed:5.2f} it/s", style="progress.elapsed")
+        task.fields["e_str"] = (
+            self._NUL if elapsed == 0 else
+            f"{elapsed_time(elapsed, is_elapsed=True)[-1]} {speed:5.2f} it/s")
+        return Text(task.fields["e_str"], style="progress.elapsed")
 
 
 class TreeBar(rp.Progress):
