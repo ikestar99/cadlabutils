@@ -184,7 +184,7 @@ def dtype_norm(
     arr : np.ndarray
         Array to normalize.
     offset : float, optional
-        Subtract normalized reference value from scaled array.
+        Normalize and subtract reference value from scaled array.
         Defaults to None, in which case no offset is performed.
 
     Returns
@@ -206,6 +206,10 @@ def dtype_norm(
     array([  8,  16,  32,  64, 128], dtype=uint8)
     >>> dtype_norm(t_arr)
     array([0.03137255, 0.0627451 , 0.1254902 , 0.25098039, 0.50196078])
+
+    Offset normalized array by 32.
+    >>> dtype_norm(t_arr, offset=32)
+    array([-0.09411765, -0.0627451 ,  0.        ,  0.1254902 ,  0.37647059])
 
     Normalize float array.
     >>> t_arr = np.array([-65500, -3000, 0, 3000, 65500]).astype(np.float16)
