@@ -429,6 +429,7 @@ class CoreTrainer(ABC):
 
             # skip if current fold/curve already completed
             if extras["fold"] < fold or extras["curve"] < curve:
+                self._make_plots()
                 return None, None
 
         # prepare datasets
