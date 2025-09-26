@@ -425,10 +425,10 @@ class CoreTrainer(ABC):
             epoch = extras["epoch"] + 1
 
             # skip if current fold/curve already completed
-            if extras["fold"] < fold:
+            if fold < extras["fold"]:
                 print(f"skipping completed fold {fold}")
                 return None, None
-            elif extras["curve"] < curve:
+            elif fold == extras["fold"] and curve < extras["curve"]:
                 print(f"skipping completed fold {fold} curve {curve}")
                 return None, None
 
