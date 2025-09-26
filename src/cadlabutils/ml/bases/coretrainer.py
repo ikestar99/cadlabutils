@@ -422,7 +422,6 @@ class CoreTrainer(ABC):
             extras = utils.load(
                 self.model_path, self.model, device=self.device,
                 load_dict={op: self.optimizer, sc: self.scheduler})
-            epoch = extras["epoch"] + 1
 
             if fold < extras["fold"]:  # skip if current fold completed
                 print(f"skipping completed fold {fold}")
@@ -430,6 +429,11 @@ class CoreTrainer(ABC):
             elif fold == extras["fold"] and curve < extras["curve"]:
                 print(f"skipping completed fold {fold} curve {curve}")
                 return None, None
+            elif fold == extras["fold"] and curve == extras["curve"]:
+                epoch = extras["epoch"] + 1
+                print(f"Resuming training at epoch {epoch}")
+            else:  # fresh model run
+                self._initialize()
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
