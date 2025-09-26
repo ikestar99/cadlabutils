@@ -424,8 +424,7 @@ class CoreTrainer(ABC):
                 load_dict={op: self.optimizer, sc: self.scheduler})
             epoch = extras["epoch"] + 1
 
-            # skip if current fold/curve already completed
-            if fold < extras["fold"]:
+            if fold < extras["fold"]:  # skip if current fold completed
                 print(f"skipping completed fold {fold}")
                 return None, None
             elif fold == extras["fold"] and curve < extras["curve"]:
@@ -435,11 +434,6 @@ class CoreTrainer(ABC):
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
-        if self._BAR is not None:  # update progress bar label
-            label = f"{len(train_loader)} batches of {self.batch_size}"
-            pbar.start_task(task_id)
-            pbar.update(task_id, label=label, completed=epoch)
-
         for e in range(epoch, epochs):  # loop over full dataset per epoch
             t_loss, t_acc = self._epoch(train_loader, train=True, epoch=e)
             v_loss, v_acc = self._epoch(valid_loader, train=False, epoch=e)
@@ -449,7 +443,9 @@ class CoreTrainer(ABC):
             t_max = max(t_acc, t_max)
             v_max = max(v_acc, v_max)
             if self._BAR is not None:
-                pbar.update(task_id, completed=epoch + 1)
+                label = f"{len(train_loader)} batches of {self.batch_size}"
+                pbar.start_task(task_id)
+                pbar.update(task_id, label=label, completed=epoch + 1)
             if v_acc >= v_max:  # save model if peak validation performance
                 utils.save(
                     self.model_path, self.model,
@@ -459,7 +455,4 @@ class CoreTrainer(ABC):
         self._make_plots()
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
-        if self._BAR is not None:
-            pbar.stop_task(task_id)
-
         return t_max, v_max
