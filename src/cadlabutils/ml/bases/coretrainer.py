@@ -367,7 +367,7 @@ class CoreTrainer(ABC):
         fold: int = 0,
         curve: int = 0,
         pbar: cdu.TreeBar = None,
-        epoch_task: cdu.rp.TaskID = None
+        task_id: cdu.rp.TaskID = None
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -401,7 +401,7 @@ class CoreTrainer(ABC):
         pbar : cdu.TreeBar, optional
             Progress bar displaying current epoch information.
             Defaults to None, in which case no epoch progress bar is displayed.
-        epoch_task : cdu.rp.TaskID, optional
+        task_id : cdu.rp.TaskID, optional
             Index of epoch progress bar in `tree_bar`.
             Defaults to None.
         """
@@ -409,19 +409,16 @@ class CoreTrainer(ABC):
         op, sc = "optimizer", "scheduler"
         epoch, t_max, v_max = 0, 0, 0
 
-        # simulate optimum batch size
         self._initialize()
         self._track_memory()
-        if self.batch_size is None:
+        if self.batch_size is None:  # simulate optimum batch size
             pair = train_dataset[0]
             self.batch_size = metrics.simulate_batch_size(
                 self.model, sample=pair[0], device=self.device, target=pair[1],
                 criterion=self.criterion, optimizer=self.optimizer,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            print("Simulated batch size:", self.batch_size)
 
-        # load model-specific checkpoint
-        if self.model_path.is_file():
+        if self.model_path.is_file():  # load model-specific checkpoint
             extras = utils.load(
                 self.model_path, self.model, device=self.device,
                 load_dict={op: self.optimizer, sc: self.scheduler})
@@ -435,9 +432,11 @@ class CoreTrainer(ABC):
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
+        if self._BAR is not None:  # update progress bar label
+            label = f"{len(train_loader)} batches of {self.batch_size}"
+            pbar.update(task_id, label=label)
 
-        # loop over full dataset per epoch
-        for e in range(epoch, epochs):
+        for e in range(epoch, epochs):  # loop over full dataset per epoch
             t_loss, t_acc = self._epoch(train_loader, train=True, epoch=e)
             v_loss, v_acc = self._epoch(valid_loader, train=False, epoch=e)
 
@@ -446,10 +445,8 @@ class CoreTrainer(ABC):
             t_max = max(t_acc, t_max)
             v_max = max(v_acc, v_max)
             if self._BAR is not None:
-                label = f"{len(train_loader)} train batches"
-                delta = epoch if e == epoch and e != 0 else 0
-                pbar.update(epoch_task, advance=1 + delta, label=label)
-            if v_acc >= v_max:
+                pbar.update(task_id, completed=epoch + 1)
+            if v_acc >= v_max:  # save model if peak validation performance
                 utils.save(
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
