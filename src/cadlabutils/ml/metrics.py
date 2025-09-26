@@ -163,7 +163,7 @@ def acc_confusion(
         Model prediction. Has shape (batch, classes, ...).
     target : torch.tensor
         Ground truth labels. Has shape (batch, ...) where trailing dimensions
-        match those in `output`. Valuses should be ``int`` dtype.
+        match those in `output`. Values should be ``int`` dtype.
     matrix : torch.tensor, optional
         Running confusion matrix of class-wise prediction probabilities. Has
         shape (true classes, predicted classes).
@@ -182,8 +182,7 @@ def acc_confusion(
     """
     # convert logits into probabilities and calculate accuracy
     output = F.softmax(output, dim=1) if logits else output
-    accuracy = (torch.argmax(output, dim=1) == target).sum().cpu().item()
-    accuracy /= target.numel()
+    accuracy = (torch.argmax(output, dim=1) == target).float().mean().item()
 
     # update confusion matrix probability distributions per class
     if matrix is not None:
