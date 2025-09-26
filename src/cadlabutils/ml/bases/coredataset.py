@@ -97,12 +97,12 @@ class CoreDataset(Dataset):
     ┏━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
     ┃ day ┃ count ┃ class: head ┃ class: tail ┃
     ┡━━━━━╇━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
-    │ Mon │ 1     │ 1           │ 0           │
-    │ Mon │ 2     │ 1           │ 0           │
-    │ Mon │ 3     │ 1           │ 0           │
-    │ Mon │ 4     │ 0           │ 1           │
-    │ Mon │ 6     │ 0           │ 1           │
-    │ Mon │ 8     │ 0           │ 1           │
+    │ Mon │ 1     │ 1           │             │
+    │     │ 2     │ 1           │             │
+    │     │ 3     │ 1           │             │
+    │     │ 4     │             │ 1           │
+    │     │ 6     │             │ 1           │
+    │     │ 8     │             │ 1           │
     │     │       │ 3           │ 3           │
     └─────┴───────┴─────────────┴─────────────┘
 
@@ -348,6 +348,11 @@ class CoreDataset(Dataset):
                 c for c in table.columns if c in self.meta.index.names]
             totals = table[count_cols].sum().to_frame().T
             totals[rem_cols] = ""  # leading columns empty
+            table = table.astype(str)
+            table[rem_cols] = table[rem_cols].where(
+                ~table[rem_cols].eq(table[rem_cols].shift()), "")
+            table[count_cols] = table[count_cols].replace(
+                to_replace="0", value="", regex=False)
             table = pd.concat(
                 [table, totals[table.columns]], ignore_index=True)
 
