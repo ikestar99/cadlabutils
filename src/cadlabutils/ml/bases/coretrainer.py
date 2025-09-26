@@ -446,8 +446,9 @@ class CoreTrainer(ABC):
             t_max = max(t_acc, t_max)
             v_max = max(v_acc, v_max)
             if self._BAR is not None:
+                label = f"{len(train_loader)} train batches"
                 delta = epoch if e == epoch and e != 0 else 0
-                pbar.update(epoch_task, advance=1 + delta)
+                pbar.update(epoch_task, advance=1 + delta, label=label)
             if v_acc >= v_max:
                 utils.save(
                     self.model_path, self.model,
