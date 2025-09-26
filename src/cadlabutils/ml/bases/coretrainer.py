@@ -438,6 +438,7 @@ class CoreTrainer(ABC):
         if self._BAR is not None:  # update progress bar label
             label = f"{len(train_loader)} batches of {self.batch_size}"
             pbar.update(task_id, label=label)
+            pbar.start_task(task_id)
 
         for e in range(epoch, epochs):  # loop over full dataset per epoch
             t_loss, t_acc = self._epoch(train_loader, train=True, epoch=e)
@@ -458,4 +459,7 @@ class CoreTrainer(ABC):
         self._make_plots()
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
+        if self._BAR is not None:
+            pbar.stop_task(task_id)
+
         return t_max, v_max
