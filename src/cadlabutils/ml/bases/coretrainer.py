@@ -426,7 +426,7 @@ class CoreTrainer(ABC):
 
             # skip if current fold/curve already completed
             if extras["fold"] < fold or extras["curve"] < curve:
-                self._make_plots()
+                print(f"skipping for fold {fold} curve {curve}")
                 return None, None
 
         # prepare datasets
