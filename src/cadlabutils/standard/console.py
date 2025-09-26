@@ -84,6 +84,16 @@ def pretty_size(
     -------
     str
         Memory as human-readable string.
+
+    Examples
+    --------
+    10 MiB, 10GiB, 10TiB.
+    >>> pretty_size(10 * (1024 ** 2))
+    '10.0 MiB'
+    >>> pretty_size(10 * (1024 ** 3))
+    '10.0 GiB'
+    >>> pretty_size(10 * (1024 ** 4))
+    '10.0 TiB'
     """
     for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi"]:
         if abs(memory) < 1024.0:

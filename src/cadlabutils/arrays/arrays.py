@@ -426,7 +426,7 @@ def sparse_to_arr(
 
 def none_concat(
         arr_2: np.ndarray,
-        arr_1: np.ndarray | None,
+        arr_1: np.ndarray = None,
         axis: int = 0
 ):
     """Concatenate two arrays, with flexible behavior if one array is None.
@@ -435,9 +435,10 @@ def none_concat(
     ----------
     arr_2 : np.ndarray
         Array to concatenate to the end of a growing sequence.
-    arr_1 : np.ndarray | None
+    arr_1 : np.ndarray, optional
         Array to concatenate to the beginning of a growing sequence. If `arr_1`
         is ``None``, arr_2 is the beginning of the sequence.
+        Defaults to None.
     axis : int, optional
         Axis along which to concatenate arrays.
         Defaults to 0.

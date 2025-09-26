@@ -6,9 +6,10 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
+import numpy as np
 import hdf5plugin
 
-from h5py import File, Group
+from h5py import File, Group, Dataset
 from pathlib import Path
 
 
@@ -117,7 +118,7 @@ def make_dataset(
 
     Returns
     -------
-    dataset (h5.Dataset):
+    dataset : Dataset
         Instantiated dataset.
 
     Other Parameters
@@ -134,3 +135,51 @@ def make_dataset(
         name, shape=shape, dtype=dtype, chunks=True, fillvalue=fill,
         **compress, **kwargs)
     return dataset
+
+
+def get_mean_std(
+        dset: Dataset,
+        axis: int = 0,
+        step: int = 50
+):
+    """Apply two-pass algorithm to compute mean and std of large dataset.
+
+    Parameters
+    ----------
+    dset : Dataset
+        Dataset for which to compute mean and std.
+    axis : int, optional
+        Axis along which to chunk `dset`.
+        Defaults to 0.
+    step : int, optional
+        Number of indices along `axis` to process as a time.
+        Defaults to 50.
+
+    Returns
+    -------
+    mean : float
+        Mean value in `dset`.
+    std : float
+        Standard deviation of values in `dset`.
+    """
+    # First pass: mean
+    total_sum, total_count = 0.0, 0
+    for i in range(0, dset.shape[axis], step):
+        indices = [slice(None) for _ in dset.shape]
+        indices[axis] = slice(i, min(i + step, dset.shape[axis]))
+        chunk = dset[tuple(indices)]
+        total_sum += np.sum(chunk)
+        total_count += chunk.size
+
+    mean = total_sum / total_count
+
+    # Second pass: variance
+    total_sq_diff = 0.0
+    for i in range(0, dset.shape[axis], step):
+        indices = [slice(None) for _ in dset.shape]
+        indices[axis] = slice(i, min(i + step, dset.shape[axis]))
+        chunk = dset[tuple(indices)]
+        total_sq_diff += np.sum((chunk - mean) ** 2)
+
+    std = np.sqrt(total_sq_diff / (total_count - 1))
+    return mean, std
