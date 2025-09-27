@@ -196,41 +196,17 @@ class CoreDataset(Dataset):
         self.parent = _parent
         self.truth_var = truth_var
 
-        # load existing metadata
-        samples = Path(samples) if type(samples) is str else samples
-        samples = pd.read_parquet(samples) if isinstance(
-            samples, Path) else samples
-
-        # transfer existing metadata
-        if isinstance(samples, pd.DataFrame):
+        if type(samples) in (Path, str):  # load existing metadata
+            samples = pd.read_parquet(Path(samples))
+        if isinstance(samples, pd.DataFrame):  # transfer existing metadata
             if self._INDEX not in samples.columns:
                 raise KeyError(
                     f"DataFrame `samples` must have a {self._INDEX} column, "
                     + f"but none found.")
 
             self.meta = samples.sort_index()
-            return
-
-        # add metadata columns
-        meta = pd.DataFrame(np.arange(samples), columns=[self._INDEX])
-        for k, v in kwargs.items():
-            if any([isinstance(v, t) for t in (list, tuple, np.ndarray)]):
-                repeat, remain = divmod(samples, len(v))
-                if remain != 0 or repeat == 0:
-                    raise ValueError(
-                        f"{self.__class__.__name__} with {samples} samples "
-                        + f"got metadata variable {k} with {len(v)} samples, "
-                        + f"which are indivisible by {remain} samples.")
-
-                v = list(v) * repeat if repeat > 1 else v
-
-            meta[k] = v
-            meta[k] = meta[k].astype("category")
-
-        # create hierarchical index and set instance attributes
-        cols = [c for c in meta.columns if c != self._INDEX]
-        self.meta = meta if len(cols) == 0 else meta.set_index(
-            cols, append=False).sort_index()
+        else:
+            self.meta = self._make_frame(samples, **kwargs)
 
     def __len__(
             self
@@ -361,6 +337,34 @@ class CoreDataset(Dataset):
             console.print(cdu.get_rich_table(table))
 
         return capture.get()
+
+    @classmethod
+    def _make_frame(
+            cls,
+            n: int,
+            **kwargs
+    ):
+        # add metadata columns
+        meta = pd.DataFrame(np.arange(n), columns=[cls._INDEX])
+        for k, v in kwargs.items():
+            if any([isinstance(v, t) for t in (list, tuple, np.ndarray)]):
+                repeat, remain = divmod(n, len(v))
+                if remain != 0 or repeat == 0:
+                    raise ValueError(
+                        f"{cls.__name__} with {n} samples got metadata "
+                        + f"variable {k} with {len(v)} samples, which are "
+                        + f"indivisible by {remain} samples.")
+
+                v = list(v) * repeat if repeat > 1 else v
+
+            meta[k] = v
+            meta[k] = meta[k].astype("category")
+
+        # create hierarchical index and set instance attributes
+        cols = [c for c in meta.columns if c != cls._INDEX]
+        meta = meta if len(cols) == 0 else meta.set_index(
+            cols, append=False).sort_index()
+        return meta
 
     def _save(
             self,
