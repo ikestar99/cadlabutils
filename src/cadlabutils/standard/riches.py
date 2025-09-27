@@ -175,7 +175,7 @@ class TimeSpeedColumn(rp.ProgressColumn):
                 task.fields.get("e_str", self._NUL), style="progress.elapsed")
 
         elapsed = time.perf_counter() - task.start_time
-        speed = (elapsed / task.completed) if elapsed > 0 else 0.0
+        speed = (elapsed / task.completed) if task.completed > 0 else 0.0
         task.fields["e_str"] = (
             self._NUL if elapsed == 0 else
             f"{elapsed_time(elapsed, is_elapsed=True)[-1]} {speed:5.2f} s/it")
