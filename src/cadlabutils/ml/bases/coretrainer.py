@@ -348,13 +348,12 @@ class CoreTrainer(ABC):
 
         # loop over dataset once
         r_stats = []
-        with loader as l:
-            for sample, target in l:
-                # forward pass, backpropagation, optimization, and statistics
-                output, loss, target = self._step(sample, target, train=train)
-                r_stats += [[loss.item(), self._step_stats(output, target)]]
-                self._track_memory()
-                del output, loss, target
+        for sample, target in loader:
+            # forward pass, backpropagation, optimization, and statistics
+            output, loss, target = self._step(sample, target, train=train)
+            r_stats += [[loss.item(), self._step_stats(output, target)]]
+            self._track_memory()
+            del output, loss, target
 
         # compute statistics and clean up after epoch
         agg_loss, agg_acc = np.mean(np.array(r_stats), axis=0)
