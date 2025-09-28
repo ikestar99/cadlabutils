@@ -347,16 +347,17 @@ class CoreTrainer(ABC):
             self.model, train=train, device=self.device, dtype=self.dtypes[0])
 
         # loop over dataset once
-        running_stats = []
-        for sample, target in loader:
-            # forward pass, backpropagation, optimization, and statistics
-            output, loss, target = self._step(sample, target, train=train)
-            running_stats += [[loss.item(), self._step_stats(output, target)]]
-            self._track_memory()
-            del output, loss, target
+        r_stats = []
+        with loader as l:
+            for sample, target in l:
+                # forward pass, backpropagation, optimization, and statistics
+                output, loss, target = self._step(sample, target, train=train)
+                r_stats += [[loss.item(), self._step_stats(output, target)]]
+                self._track_memory()
+                del output, loss, target
 
         # compute statistics and clean up after epoch
-        agg_loss, agg_acc = np.mean(np.array(running_stats), axis=0)
+        agg_loss, agg_acc = np.mean(np.array(r_stats), axis=0)
         self._epoch_reset(
             epoch, train=train, samples=len(loader.dataset), loss=agg_loss,
             accuracy=agg_acc)
@@ -460,6 +461,7 @@ class CoreTrainer(ABC):
                     epoch=e, fold=fold, curve=curve)
 
         self._make_plots()
+        del train_loader, valid_loader
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
         return t_max, v_max
