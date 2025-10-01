@@ -11,6 +11,7 @@ import time
 import psutil
 import platform
 
+from pympler import asizeof
 from datetime import datetime
 
 
@@ -113,10 +114,10 @@ def pretty_size(
     return f"{memory:.1f} Ei{memory}"
 
 
-def get_cpu_memory(
+def get_ram(
         scale: int = 0
 ):
-    """Report memory consumption on CPU.
+    """Report RAM consumption.
 
     Parameters
     ----------
@@ -136,3 +137,29 @@ def get_cpu_memory(
     allocated = (vm.total - vm.available) / scalar
     total = vm.total / scalar
     return allocated, total
+
+
+def get_memory_repeat(
+        obj: object,
+        scalar: float = 0.75
+):
+    """Get number of objects that can safely fit in available system memory.
+
+    Parameters
+    ----------
+    obj : object
+        Object to tile in available system memory.
+    scalar : float, optional
+        Fraction of peak repeats to return as optimum count.
+        Defaults to 0.75.
+
+    Returns
+    -------
+    repeats : int
+        Number of `obj` copies that can safely fit in available system memory.
+    """
+    obj_size = asizeof.asizeof(obj)
+    ram_used, ram_tot = get_ram()
+    repeats = int(((ram_tot - ram_used) // obj_size) * scalar)
+    repeats = max(1, repeats)
+    return repeats

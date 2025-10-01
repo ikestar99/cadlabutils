@@ -13,6 +13,8 @@ import skimage.morphology as skm
 
 from typing import Callable
 
+from cadlabutils import get_memory_repeat
+
 
 def label_array(
         arr: np.ndarray,
@@ -279,13 +281,9 @@ def masked_statistic(
 
 def project_arr(
         arr: np.ndarray,
-        func: Callable,
-        step: int = 50
+        func: Callable
 ):
     """Generate projections along all axes of an array.
-
-    Useful for array-like objects (h5py.dataset, zarr.Array, etc.) too large to
-    fit in memory.
 
     Parameters
     ----------
@@ -294,14 +292,16 @@ def project_arr(
     func : Callable
         Numpy-compatible function with which to project along each axis. Must
         accept an "axis" keyword argument.
-    step : int, optional
-        Number of indices along the first dimension to process at a time.
-        Defaults to 50.
 
     Returns
     -------
     proj : list[np.ndarray]
         Projections along each axis of `arr`.
+
+    Notes
+    -----
+    Useful for array-like objects (h5py.dataset, zarr.Array, etc.) too large to
+    fit in memory.
 
     Examples
     --------
@@ -326,6 +326,7 @@ def project_arr(
         for i in range(len(arr.shape))]
 
     # chunk along first dimension
+    step = get_memory_repeat(arr[0])
     for idx in range(0, arr.shape[0], step):
         end = min(idx + step, arr.shape[0])
         sub = arr[idx:end]
@@ -341,12 +342,61 @@ def project_arr(
 
     # update first projection if slice-by-slice comparison invalid
     if not slice_by_slice:
+        step = get_memory_repeat(arr[1])
         proj[0] = np.concatenate([
             func(arr[:, ydx: min(ydx + step, arr.shape[1])], axis=0)
             for ydx in range(0, arr.shape[1], step)], axis=0)
 
     # return projections
     return proj
+
+
+def get_mean_std(
+        arr: np.ndarray,
+        axis: int = 0
+):
+    """Apply two-pass algorithm to compute mean and std of large array.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array for which to compute mean and std.
+    axis : int, optional
+        Axis along which to chunk `dset`.
+        Defaults to 0.
+
+    Returns
+    -------
+    mean : float
+        Mean value in `arr`.
+    std : float
+        Standard deviation of values in `arr`.
+    """
+    idx = [slice(None) for _ in arr.shape]
+    idx[axis] = 0
+    step = get_memory_repeat(arr[tuple(idx)])
+
+    # First pass: mean
+    total_sum, total_count = 0.0, 0
+    for i in range(0, arr.shape[axis], step):
+        indices = [slice(None) for _ in arr.shape]
+        indices[axis] = slice(i, min(i + step, arr.shape[axis]))
+        chunk = arr[tuple(indices)]
+        total_sum += np.sum(chunk)
+        total_count += chunk.size
+
+    mean = total_sum / total_count
+
+    # Second pass: variance
+    total_sq_diff = 0.0
+    for i in range(0, arr.shape[axis], step):
+        indices = [slice(None) for _ in arr.shape]
+        indices[axis] = slice(i, min(i + step, arr.shape[axis]))
+        chunk = arr[tuple(indices)]
+        total_sq_diff += np.sum((chunk - mean) ** 2)
+
+    std = np.sqrt(total_sq_diff / (total_count - 1))
+    return mean, std
 
 
 def arr_to_sparse(

@@ -98,7 +98,7 @@ class CoreTrainer(ABC):
     {"patience": dummy_epochs} where `dummy_epochs` is an integer larger than
     the number of epochs planned during training.
     """
-    _BAR, _CPU, _GPU, _GPR = None, None, None, None
+    _BAR, _RAM, _GPU, _GPR = None, None, None, None
 
     def __init__(
             self,
@@ -231,12 +231,12 @@ class CoreTrainer(ABC):
         if self._BAR is None:
             return
 
-        c_u, c_t = cdu.get_cpu_memory(scale=3)
-        self._CPU = (
+        r_u, r_t = cdu.get_ram(scale=3)
+        self._RAM = (
             self._BAR.add_task(
-                "CPU use (GiB)", tabs=1, total=c_t, show_time=False)
-            if self._CPU is None else self._CPU)
-        self._BAR.update(self._CPU, completed=c_u)
+                "RAM use (GiB)", tabs=1, total=r_t, show_time=False)
+            if self._RAM is None else self._RAM)
+        self._BAR.update(self._RAM, completed=r_u)
         if self. device.type == "cpu":
             return
 
@@ -247,7 +247,7 @@ class CoreTrainer(ABC):
             self._GPR = self._BAR.add_task(
                 "GPU res (GiB)", tabs=2, total=g_t, show_time=False)
 
-        self._BAR.update(self._CPU, completed=c_u)
+        self._BAR.update(self._RAM, completed=r_u)
         self._BAR.update(self._GPR, completed=g_r)
 
     def _initialize(
