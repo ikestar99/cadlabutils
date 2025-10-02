@@ -374,7 +374,7 @@ def get_mean_std(
     """
     idx = [slice(None) for _ in arr.shape]
     idx[axis] = 0
-    step = 10  # get_memory_repeat(arr[tuple(idx)])
+    step = get_memory_repeat(arr[tuple(idx)])
 
     # First pass: mean
     total_sum, total_count = 0.0, 0
