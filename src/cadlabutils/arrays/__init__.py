@@ -11,6 +11,7 @@ import warnings
 from .arrays import *
 from .slicing import *
 from .geometry import *
+from .dataframe import *
 
 
 ERRORS = []
