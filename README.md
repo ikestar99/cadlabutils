@@ -108,19 +108,19 @@ myenv\Scripts\activate      # Windows PowerShell
 Install `cadlabutils` directly from GitHub, w/o optional dependencies.
 ```bash
 # Minimal installation
-pip install "git+https://github.com/ikestar99/cadlabutils.git"
+pip install "cadlabutils @ git+https://github.com/ikestar99/cadlabutils.git"
 
 # Array manipulation tools
-pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[arrays]"
+pip install "cadlabutils[arrays] @ git+https://github.com/ikestar99/cadlabutils.git@main"
 
 # File manipulation tools
-pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[files]"
+pip install "cadlabutils[files] @ git+https://github.com/ikestar99/cadlabutils.git@main"
 
 # Pytorch utilities
-pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[ml]"
+pip install "cadlabutils[ml] @ git+https://github.com/ikestar99/cadlabutils.git@main"
 
 # Complete install
-pip install "git+https://github.com/ikestar99/cadlabutils.git#egg=cadlabutils[dev]"
+pip install "cadlabutils[dev] @ git+https://github.com/ikestar99/cadlabutils.git@main"
 ```
 
 Clone repo and install in editable configuration for local development
