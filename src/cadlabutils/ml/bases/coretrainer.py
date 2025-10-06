@@ -448,10 +448,10 @@ class CoreTrainer(ABC):
 
             if fold < extras["fold"]:  # skip if current fold completed
                 print(f"skipping completed fold {fold}")
-                return None, None
+                return None, None, None, None
             elif fold == extras["fold"] and curve < extras["curve"]:
                 print(f"skipping completed fold {fold} curve {curve}")
-                return None, None
+                return None, None, None, None
             elif fold == extras["fold"] and curve == extras["curve"]:
                 epoch = extras["epoch"] + 1
                 print(f"Resuming training at epoch {epoch}")
@@ -492,7 +492,6 @@ class CoreTrainer(ABC):
         del train_loader, valid_loader
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
-        print(f"check: {t_min} {self.v_min} {t_max} {self.v_max}")
         return t_min, self.v_min, t_max, self.v_max
 
     def evaluate(
