@@ -371,7 +371,8 @@ class CoreTrainer(ABC):
         fold: int = 0,
         curve: int = 0,
         pbar: cdu.TreeBar = None,
-        task_id: cdu.rp.TaskID = None
+        task_id: cdu.rp.TaskID = None,
+        min_iter: int = 100
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -408,6 +409,9 @@ class CoreTrainer(ABC):
         task_id : cdu.rp.TaskID, optional
             Index of epoch progress bar in `tree_bar`.
             Defaults to None.
+        min_iter : int, optional
+            Minimum allowed iterations in an epoch. Useful if optimum batch
+            size is much larger than dataset size.
         """
         self.fold, self.curve, self._BAR = fold, curve, pbar
         op, sc = "optimizer", "scheduler"
@@ -421,6 +425,8 @@ class CoreTrainer(ABC):
                 self.model, sample=pair[0], device=self.device, target=pair[1],
                 criterion=self.criterion, optimizer=self.optimizer,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
+            self.batch_size = min(
+                self.batch_size, len(train_dataset) // min_iter)
 
         if self.model_path.is_file():  # load model-specific checkpoint
             extras = utils.load(

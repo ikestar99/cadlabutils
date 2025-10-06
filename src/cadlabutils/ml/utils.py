@@ -146,10 +146,10 @@ def get_dataloader(
     sample and `batch_size` > 1.
     """
     remainder = len(dataset) % batch_size
-    drop = True if (remainder == 1) and (batch_size != 1) else False
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle, num_workers=workers,
-        pin_memory=True, persistent_workers=True, drop_last=drop, **kwargs)
+        pin_memory=True, persistent_workers=True,
+        drop_last=(remainder == 1) and (batch_size != 1), **kwargs)
     return loader
 
 
