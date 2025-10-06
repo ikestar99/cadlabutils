@@ -117,6 +117,7 @@ def get_dataloader(
         batch_size: int,
         shuffle: bool = True,
         workers: int = 4,
+        drop_last: bool = True,
         **kwargs
 ):
     """Create a DataLoader from a Dataset.
@@ -133,6 +134,10 @@ def get_dataloader(
     workers : int, optional
         Number of parallel workers.
         Defaults to 4.
+    drop_last : bool, optional
+        If True and `batch_size` is 1, drop final batch if number of samples
+        is less than `batch_size`.
+        Defaults to True.
 
     Returns
     -------
@@ -149,7 +154,7 @@ def get_dataloader(
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle, num_workers=workers,
         pin_memory=True, persistent_workers=True,
-        drop_last=(remainder == 1) and (batch_size != 1), **kwargs)
+        drop_last=all((remainder > 0, batch_size != 1, drop_last)), **kwargs)
     return loader
 
 
