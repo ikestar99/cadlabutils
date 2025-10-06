@@ -255,7 +255,7 @@ class CoreTrainer(ABC):
             self
     ):
         """Reinitialize trainable parameters."""
-        self.model = utils.set_mode(
+        utils.set_mode(
             self._cfg["model"][0](**self._cfg["model"][1]),
             train=True, device=self.device, dtype=self.dtypes[0])
         self.criterion = self._cfg["criterion"][0](**self._cfg["criterion"][1])
@@ -344,7 +344,7 @@ class CoreTrainer(ABC):
         torch.cuda.empty_cache()
 
         # prepare for training or inference
-        self.model = utils.set_mode(
+        utils.set_mode(
             self.model, train=train, device=self.device, dtype=self.dtypes[0])
 
         # loop over dataset once
@@ -382,8 +382,7 @@ class CoreTrainer(ABC):
         train_dataset : torch.utils.data.Dataset
             Annotated dataset on which to train model.
         valid_dataset : torch.utils.data.Dataset
-            Annotated dataset on which to validate model at the end of each
-            epoch.
+            Annotated dataset on which to validate model after each epoch.
         epochs : int
             Maximum number of training epochs during training. Each epoch
             involves a complete iteration through training and validation
@@ -416,6 +415,12 @@ class CoreTrainer(ABC):
         save : {"loss", "acc", "both"}, optional
             Metric with which to evaluate current model for saving.
             Defaults to "loss".
+
+        Notes
+        -----
+        `train_dataset` and `valid_dataset` should define a __getitem__ method
+        that returns an iterable with at least two indices. The first index is
+        used as input data while the second index serves as the target.
         """
         self.fold, self.curve, self._BAR = fold, curve, pbar
         op, sc = "optimizer", "scheduler"
@@ -484,3 +489,61 @@ class CoreTrainer(ABC):
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
         return t_min, self.v_min, t_max, self.v_max
+
+    def evaluate(
+            self,
+            eval_dataset: torch.utils.data.Dataset,
+            batch_size: int = 10,
+            pbar: cdu.TreeBar = None,
+            task_id: cdu.rp.TaskID = None,
+    ):
+        """Inference on unlabeled data with trained model.
+
+        Parameters
+        ----------
+        eval_dataset : torch.utils.data.Dataset
+            Unlabeled dataset used for inference.
+        batch_size : int
+            Batch size used for inference.
+
+        Yields
+        ------
+        int
+            Index of first element in current batch along `eval_dataset`.
+        np.ndarray
+            Model output for current batch.
+
+        Other Parameters
+        ----------------
+        pbar : cdu.TreeBar, optional
+            Progress bar displaying current epoch information.
+            Defaults to None, in which case no epoch progress bar is displayed.
+        task_id : cdu.rp.TaskID, optional
+            Index of epoch progress bar in `tree_bar`.
+            Defaults to None.
+
+        Notes
+        -----
+        `train_dataset` and `valid_dataset` should define a __getitem__ method
+        that returns an iterable with at least two indices. The first index is
+        used as input data while the second index serves as the target.
+        """
+        self._initialize()
+        utils.load(self.model_path, self.model, device=self.device)
+        utils.set_mode(
+            self.model, train=False, device=self.device, dtype=self.dtypes[0])
+        eval_loader = utils.get_dataloader(
+                eval_dataset, batch_size=batch_size, shuffle=False)
+        if pbar is not None:
+            label = f"{len(eval_loader)} batches of {self.batch_size}"
+            pbar.start_task(task_id)
+            pbar.update(task_id, label=label, total=len(eval_loader))
+
+        for b, batch in enumerate(eval_loader):
+            output, _, _ = utils.forward_pass(
+                self.model, batch, device=self.device,
+                sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
+            if pbar is not None:
+                pbar.update(task_id, advance=1)
+
+            yield b * batch_size, output.detach().cpu().numpy()

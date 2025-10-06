@@ -299,16 +299,13 @@ def set_mode(
         Datatype of model parameters.
         Defaults to torch.float32, or single-precision.
 
-    Returns
-    -------
-    model : nn.Module
-        Model with which to perform inference, prepared for specified mode
-        and transferred to device with indicated precision.
+    Notes
+    -----
+    Adjusts model in-place.
     """
-    model = model.to(device, dtype=dtype)
-    model = model.train() if train else model.eval()
+    model.to(device, dtype=dtype)
+    _ = model.train() if train else model.eval()
     torch.set_grad_enabled(train)
-    return model
 
 
 def forward_pass(

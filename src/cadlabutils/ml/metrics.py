@@ -110,7 +110,7 @@ def simulate_batch_size(
     target = None if target is None else torch.tensor(target).unsqueeze(0)
 
     # loop until optimum value found
-    model = set_mode(
+    set_mode(
         model, train=target is not None, device=device, dtype=sample_dtype)
     while True:
         # generate synthetic batch data
