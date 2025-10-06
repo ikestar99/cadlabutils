@@ -12,6 +12,7 @@ import scipy.ndimage as scn
 import skimage.morphology as skm
 
 from typing import Callable
+from scipy.spatial.distance import pdist
 
 from cadlabutils import get_memory_repeat
 
@@ -521,3 +522,22 @@ def none_concat(
     """
     arr = arr_2 if arr_1 is None else np.concatenate((arr_1, arr_2), axis=axis)
     return arr
+
+
+def average_distance(
+        arr: np.ndarray
+):
+    """Compute average pairwise euclidean distance between all points.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Has shape (n_points, n_dimensions).
+
+    Returns
+    -------
+    dist : float
+        Average pairwise distance between all points in `arr`.
+    """
+    dist = pdist(arr, metric="euclidean").mean()
+    return dist

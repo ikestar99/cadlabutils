@@ -372,7 +372,8 @@ class CoreTrainer(ABC):
         curve: int = 0,
         pbar: cdu.TreeBar = None,
         task_id: cdu.rp.TaskID = None,
-        min_iter: int = 100
+        min_iter: int = 100,
+        save: str = "loss"
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -412,6 +413,9 @@ class CoreTrainer(ABC):
         min_iter : int, optional
             Minimum allowed iterations in an epoch. Useful if optimum batch
             size is much larger than dataset size.
+        save : {"loss", "acc", "both"}, optional
+            Metric with which to evaluate current model for saving.
+            Defaults to "loss".
         """
         self.fold, self.curve, self._BAR = fold, curve, pbar
         op, sc = "optimizer", "scheduler"
@@ -467,7 +471,9 @@ class CoreTrainer(ABC):
                 label = f"{len(train_loader)} batches of {self.batch_size}"
                 pbar.start_task(task_id)
                 pbar.update(task_id, label=label, completed=e + 1)
-            if v_loss <= self.v_min and v_acc >= self.v_max:
+            check = [v_loss <= self.v_min] if save in ("loss", "both") else []
+            check += [v_acc >= self.v_max] if save in ("acc", "both") else []
+            if all(check):
                 utils.save(
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
