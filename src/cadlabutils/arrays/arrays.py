@@ -538,6 +538,12 @@ def average_distance(
     -------
     dist : float
         Average pairwise distance between all points in `arr`.
+
+    Examples
+    --------
+    >>> test_arr = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    >>> average_distance(test_arr)
+    np.float64(1.4142135623730951)
     """
     dist = pdist(arr, metric="euclidean").mean()
     return dist
