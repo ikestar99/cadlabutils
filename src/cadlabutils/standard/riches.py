@@ -19,7 +19,8 @@ from rich.traceback import install
 from .console import elapsed_time
 
 
-install(show_locals=True, width=120)
+install(
+    show_locals=True, width=120, suppress=["numpy", "pandas", "torch"])
 
 
 def pbar(
