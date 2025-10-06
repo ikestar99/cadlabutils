@@ -119,6 +119,7 @@ class CoreTrainer(ABC):
         self.dtypes = dtypes
         self.model_path = out_dir.joinpath("model.safetensors")
         self.fold, self.curve, self.batch_size = 0, 0, None
+        self.v_min, self.v_max = None, 0
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
@@ -410,8 +411,7 @@ class CoreTrainer(ABC):
         """
         self.fold, self.curve, self._BAR = fold, curve, pbar
         op, sc = "optimizer", "scheduler"
-        epoch, t_max, v_max = 0, 0, 0
-        t_min, v_min = None, None
+        epoch, t_max, t_min = 0, 0, None
 
         self._initialize()
         self._track_memory()
@@ -442,23 +442,26 @@ class CoreTrainer(ABC):
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
-        for e in range(epoch, epochs):  # loop over full dataset per epoch
+
+        # loop over full dataset per epoch
+        for e in range(epoch, epochs):
             t_loss, t_acc = self._epoch(train_loader, train=True, epoch=e)
             v_loss, v_acc = self._epoch(valid_loader, train=False, epoch=e)
 
             # modify learning rate based on validation loss
             self.scheduler.step(v_loss)
             t_min = t_loss if t_min is None else min(t_loss, t_min)
-            v_min = v_loss if v_min is None else min(v_loss, v_min)
+            self.v_min = v_loss if self.v_min is None else min(
+                v_loss, self.v_min)
             t_max = max(t_acc, t_max)
-            v_max = max(v_acc, v_max)
+            self.v_max = max(v_acc, self.v_max)
 
             # save model if peak validation performance
             if self._BAR is not None:
                 label = f"{len(train_loader)} batches of {self.batch_size}"
                 pbar.start_task(task_id)
                 pbar.update(task_id, label=label, completed=e + 1)
-            if v_loss <= v_min and v_acc >= v_max:
+            if v_loss <= self.v_min and v_acc >= self.v_max:
                 utils.save(
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
@@ -468,4 +471,4 @@ class CoreTrainer(ABC):
         del train_loader, valid_loader
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
-        return t_min, v_min, t_max, v_max
+        return t_min, self.v_min, t_max, self.v_max
