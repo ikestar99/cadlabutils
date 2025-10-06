@@ -539,9 +539,8 @@ class CoreTrainer(ABC):
         eval_loader = utils.get_dataloader(
                 eval_dataset, batch_size=batch_size, shuffle=False)
         if pbar is not None:
-            label = f"{len(eval_loader)} batches of {self.batch_size}"
             pbar.start_task(task_id)
-            pbar.update(task_id, label=label, total=len(eval_loader))
+            pbar.update(task_id, total=len(eval_loader))
 
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
