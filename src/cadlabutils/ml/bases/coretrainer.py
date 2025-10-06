@@ -470,15 +470,13 @@ class CoreTrainer(ABC):
                 pbar.start_task(task_id)
                 pbar.update(task_id, label=label, completed=e + 1)
             check = [v_loss <= self.v_min] if save in ("loss", "both") else []
-            print(save)
-            print(check)
             check += [v_acc >= self.v_max] if save in ("acc", "both") else []
-            print(check)
             if all(check):
-                print("saving")
-                message = f"fold {fold} curve {curve} epoch {e}"
+                message = f"Saving fold {fold} curve {curve} epoch {e}"
                 message += f"\n    validation: loss {v_loss:.4e}"
-                message += f"\n    validation: accuracy {100 * v_acc:.2f}"
+                message += (
+                    f"\n    validation: accuracy {100 * v_acc:.2f}"
+                    if save in ("acc", "both") else "")
                 print(message)
                 utils.save(
                     self.model_path, self.model,
