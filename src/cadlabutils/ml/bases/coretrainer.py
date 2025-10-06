@@ -411,6 +411,7 @@ class CoreTrainer(ABC):
         self.fold, self.curve, self._BAR = fold, curve, pbar
         op, sc = "optimizer", "scheduler"
         epoch, t_max, v_max = 0, 0, 0
+        t_min, v_min = None, None
 
         self._initialize()
         self._track_memory()
@@ -447,13 +448,17 @@ class CoreTrainer(ABC):
 
             # modify learning rate based on validation loss
             self.scheduler.step(v_loss)
+            t_min = t_loss if t_min is None else min(t_loss, t_min)
+            v_min = v_loss if v_min is None else min(v_loss, v_min)
             t_max = max(t_acc, t_max)
             v_max = max(v_acc, v_max)
+
+            # save model if peak validation performance
             if self._BAR is not None:
                 label = f"{len(train_loader)} batches of {self.batch_size}"
                 pbar.start_task(task_id)
                 pbar.update(task_id, label=label, completed=e + 1)
-            if v_acc >= v_max:  # save model if peak validation performance
+            if v_loss <= v_min and v_acc >= v_max:
                 utils.save(
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
@@ -463,4 +468,4 @@ class CoreTrainer(ABC):
         del train_loader, valid_loader
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
-        return t_max, v_max
+        return t_min, v_min, t_max, v_max
