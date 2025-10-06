@@ -394,17 +394,6 @@ class CoreTrainer(ABC):
             Current index along learning curve generation.
             Defaults to 0.
 
-        Returns
-        -------
-        t_min : float
-            Minimum average training loss observed across epochs.
-        self.v_min : float
-            Minimum average validation loss observed across epochs.
-        t_max : float
-            Peak average training accuracy observed across epochs.
-        self.v_max : float
-            Peak average validation accuracy observed across epochs.
-
         Other Parameters
         ----------------
         pbar : cdu.TreeBar, optional
@@ -448,10 +437,10 @@ class CoreTrainer(ABC):
 
             if fold < extras["fold"]:  # skip if current fold completed
                 print(f"skipping completed fold {fold}")
-                return None, None, None, None
+                return
             elif fold == extras["fold"] and curve < extras["curve"]:
                 print(f"skipping completed fold {fold} curve {curve}")
-                return None, None, None, None
+                return
             elif fold == extras["fold"] and curve == extras["curve"]:
                 epoch = extras["epoch"] + 1
                 print(f"Resuming training at epoch {epoch}")
@@ -483,6 +472,10 @@ class CoreTrainer(ABC):
             check = [v_loss <= self.v_min] if save in ("loss", "both") else []
             check += [v_acc >= self.v_max] if save in ("acc", "both") else []
             if all(check):
+                message = f"fold {fold} curve {curve} epoch {e}"
+                message += f"\n    validation: loss {v_loss:.4e}"
+                message += f"\n    validation: accuracy {100 * v_acc:.2f}"
+                print(message)
                 utils.save(
                     self.model_path, self.model,
                     save_dict={op: self.optimizer, sc: self.scheduler},
@@ -492,7 +485,6 @@ class CoreTrainer(ABC):
         del train_loader, valid_loader
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
-        return t_min, self.v_min, t_max, self.v_max
 
     def evaluate(
             self,
