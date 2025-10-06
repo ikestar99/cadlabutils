@@ -492,6 +492,7 @@ class CoreTrainer(ABC):
         del train_loader, valid_loader
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
+        print(f"check: {t_min} {self.v_min} {t_max} {self.v_max}")
         return t_min, self.v_min, t_max, self.v_max
 
     def evaluate(
