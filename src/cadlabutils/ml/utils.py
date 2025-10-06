@@ -117,7 +117,7 @@ def get_dataloader(
         batch_size: int,
         shuffle: bool = True,
         workers: int = 4,
-        drop_last: bool = True,
+        drop_last: bool = False,
         **kwargs
 ):
     """Create a DataLoader from a Dataset.
