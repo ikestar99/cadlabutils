@@ -396,9 +396,13 @@ class CoreTrainer(ABC):
 
         Returns
         -------
+        t_min : float
+            Minimum average training loss observed across epochs.
+        self.v_min : float
+            Minimum average validation loss observed across epochs.
         t_max : float
             Peak average training accuracy observed across epochs.
-        v_max : float
+        self.v_max : float
             Peak average validation accuracy observed across epochs.
 
         Other Parameters
