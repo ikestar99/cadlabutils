@@ -492,8 +492,12 @@ class CoreTrainer(ABC):
                 self.pbar.update(task_id, label=label, completed=e + 1)
 
         self._make_plots()
+
+        # remove within-loop values from memory
         del train_loader, valid_loader
         del self.model, self.criterion, self.optimizer, self.scheduler
+        self.curr_path.unlink()
+        self.curr_path.with_suffix(".pth").unlink()
         torch.cuda.empty_cache()
 
     def evaluate(
