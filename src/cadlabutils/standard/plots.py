@@ -7,14 +7,16 @@ Created on Fri Apr 9 03:38:05 2021
 """
 
 
+# 1. Standard library imports
 import io
-import numpy as np
-from PIL import Image
-import seaborn as sns
-import matplotlib.pyplot as plt
 
-from mpl_toolkits.mplot3d import Axes3D
+# 2. Third-party library imports
+import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+from mpl_toolkits.mplot3d import Axes3D
+import numpy as np
+import seaborn as sns
+from PIL import Image
 
 
 sns.set_theme(style="ticks")

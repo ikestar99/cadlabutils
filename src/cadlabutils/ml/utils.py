@@ -6,18 +6,91 @@ Created on Wed Aug 06 09:00:00 2025
 """
 
 
-import torch
-import torch.nn as nn
-import torch.cuda as cuda
-
+# 1. Standard library imports
 from pathlib import Path
-from torch.optim import Optimizer
-from torch.utils.data import Dataset, DataLoader
-from safetensors.torch import save_file, load_file
+
+# 2. Third-party library imports
+import torch
+import torch.cuda as cuda
+import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset
+from safetensors.torch import load_file, save_file
 
 
 _SAFE = ".safetensors"
 _PTH = ".pth"
+
+
+def is_better(
+        curr_loss: float = None,
+        best_loss: float = None,
+        curr_acc: float = None,
+        best_acc: float = None
+):
+    """Determine if current performance is better than prior best performance.
+
+    Parameters
+    ----------
+    curr_loss : float, optional
+        Loss metric after current epoch.
+        Defaults to None.
+    best_loss : float, optional
+        Best loss metric from all prior epochs.
+        Defaults to None.
+    curr_acc : float, optional
+        Accuracy metric after current epoch.
+        Defaults to None, in which case accuracy is not considered.
+    best_acc : float, optional
+        Best accuracy metric from all prior epochs.
+        Defaults to None.
+
+    Returns
+    -------
+    better : bool
+        If True, current metrics are better than prior best performance based
+        on decreasing loss and/or increasing accuracy.
+
+    Raises
+    ------
+    ValueError
+        Must provide `curr_loss`, `curr_acc`, or both.
+
+    Notes
+    -----
+    Any float values for `curr_loss` and `curr_acc` are considered better than
+    ``None`` for `best_loss` and `best_acc`.
+
+    Examples
+    --------
+    Performance is better for current model.
+    >>> is_better(curr_loss=0.5, best_loss=0.7)
+    True
+    >>> is_better(curr_acc=0.6, best_acc=0.3)
+    True
+    >>> is_better(curr_loss=0.5, curr_acc=0.6)
+    True
+    >>> is_better(curr_loss=0.5, best_loss=0.7, curr_acc=0.6, best_acc=0.3)
+    True
+
+    Performance is better for prior models.
+    >>> is_better(curr_loss=0.5, best_loss=0.3)
+    False
+    >>> is_better(curr_acc=0.6, best_acc=0.9)
+    False
+    >>> is_better(curr_loss=0.5, best_loss=0.7, curr_acc=0.6, best_acc=0.9)
+    False
+    >>> is_better(curr_loss=0.5, best_loss=0.3, curr_acc=0.6, best_acc=0.3)
+    False
+    """
+    better = True
+    if curr_loss is not None:
+        better &= (True if best_loss is None else curr_loss < best_loss)
+    if curr_acc is not None:
+        better &= (True if best_acc is None else curr_acc > best_acc)
+    if curr_loss is None and curr_acc is None:
+        raise ValueError("Must provide `curr_loss` or `curr_acc`")
+
+    return better
 
 
 def get_device(
@@ -319,7 +392,7 @@ def forward_pass(
         device: torch.device,
         target: torch.tensor = None,
         criterion: nn.Module = None,
-        optimizer: Optimizer = None,
+        optimizer: torch.optim.Optimizer = None,
         sample_dtype: torch.dtype = torch.float32,
         target_dtype: torch.dtype = torch.int64
 ):
@@ -339,7 +412,7 @@ def forward_pass(
     criterion : nn.Module, optional
         Instantiated loss function to use for backpropagation.
         Defaults to None, in which case loss is not computed.
-    optimizer : Optimizer, optional
+    optimizer : torch.optim.Optimizer, optional
         Instantiated optimizer used for model parameter optimization after
         backpropagation.
         Defaults to None, in which case gradients are unaltered.

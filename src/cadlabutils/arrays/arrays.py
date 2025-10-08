@@ -6,14 +6,17 @@ Created on Tue July 4 13:06:21 2023
 """
 
 
+# 1. Standard library imports
+from typing import Callable
+
+# 2. Third-party library imports
 import numpy as np
-import scipy.stats as sst
 import scipy.ndimage as scn
+import scipy.stats as sst
+from scipy.spatial.distance import pdist
 import skimage.morphology as skm
 
-from typing import Callable
-from scipy.spatial.distance import pdist
-
+# 3. Local application / relative imports
 from cadlabutils import get_memory_repeat
 
 

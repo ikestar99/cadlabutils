@@ -6,9 +6,11 @@ Created on Jul 21 2025
 """
 
 
-import numpy as np
-
+# 1. Standard library imports
 from typing import Union
+
+# 2. Third-party library imports
+import numpy as np
 
 
 IntArrayLike = Union[list[int] | tuple[int] | np.ndarray[int]]

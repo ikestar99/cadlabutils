@@ -6,11 +6,12 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
-import zarr
-import numpy as np
-
-from typing import Union
+# 1. Standard library imports
 from pathlib import Path
+
+# 2. Third-party library imports
+import numpy as np
+import zarr
 from numcodecs import Blosc
 
 

@@ -6,8 +6,10 @@ Created on Aug 15 2025
 """
 
 
+# 1. Standard library imports
 import warnings
 
+# 3. Local application / relative imports
 from .arrays import *
 from .slicing import *
 from .geometry import *

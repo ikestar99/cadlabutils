@@ -6,12 +6,12 @@ Created on Wed Aug 06 09:00:00 2025
 """
 
 
+# 2. Third-party library imports
 import torch
 import torch.nn as nn
-
-from torch.optim import Optimizer
 import torch.nn.functional as F
 
+# 3. Local application / relative imports
 from .utils import forward_pass, set_mode
 
 
@@ -53,7 +53,7 @@ def simulate_batch_size(
         device: torch.device,
         target: torch.tensor = None,
         criterion: nn.Module = None,
-        optimizer: Optimizer = None,
+        optimizer: torch.optim.Optimizer = None,
         sample_dtype: torch.dtype = torch.float32,
         target_dtype: torch.dtype = torch.int64,
         start_size: int = 5,
@@ -76,7 +76,7 @@ def simulate_batch_size(
         Defaults to None, in which case loss is not computed.
     criterion : nn.Module, optional
         Instantiated loss function. Passed to forward_pass function.
-    optimizer : Optimizer, optional
+    optimizer : torch.optim.Optimizer, optional
         Instantiated optimizer. Passed to forward_pass function.
 
     Returns

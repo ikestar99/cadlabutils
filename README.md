@@ -151,8 +151,8 @@ import cadlabutils.arrays as arrays
 
 
 # equivalent methods
-area_1 = cdu.arrays.radial_measure(radius=5, mode="a")
-area_2 = arrays.radial_measure(radius=5, mode="a")
+area_1 = cdu.arrays.round_kernel(2, radius=2)
+area_2 = arrays.round_kernel(2, radius=2)
 ```
 
 Some included utilities and dependencies aren't applicable to all projects, such as

@@ -6,9 +6,11 @@ Created on Aug 15 2025
 """
 
 
-import yaml
-
+# 1. Standard library imports
 from pathlib import Path
+
+# 2. Third-party library imports
+import yaml
 
 
 def to_yaml(

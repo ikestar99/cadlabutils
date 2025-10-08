@@ -6,13 +6,15 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
+# 1. Standard library imports
+from io import BytesIO
+from pathlib import Path
+
+# 2. Third-party library imports
+from bs4 import BeautifulSoup
 import natsort
 import requests
 import tifffile as tf
-
-from io import BytesIO
-from bs4 import BeautifulSoup
-from pathlib import Path
 
 
 def _request_response(

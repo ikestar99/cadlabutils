@@ -6,7 +6,11 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
+# 1. Standard library imports
 from pathlib import Path
+
+# 2. Third-party library imports
+import pandas as pd
 
 
 def find_first_row(
@@ -42,3 +46,25 @@ def find_first_row(
             return _check_rows(f)
 
     return _check_rows(file.splitlines())
+
+
+def append_data(
+        file: Path,
+        data: pd.DataFrame,
+        index: bool = False,
+):
+    """Either create or append data to a csv file.
+
+    Parameters
+    ----------
+    file : Path
+        Path to save data (csv).
+    data : pd.DataFrame
+        Data to append.
+    index : bool, optional
+        If True, include index of `data` in `file`.
+        Defaults to ``False``.
+    """
+    exists = file.is_file()
+    data.to_csv(
+        file, index=index, mode="a" if exists else "w", header=not exists)

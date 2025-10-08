@@ -6,10 +6,9 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
+# 2. Third-party library imports
 import numpy as np
 import scipy.spatial as ssp
-
-from scipy.spatial.distance import cdist
 
 
 class UnionFind:
@@ -179,7 +178,7 @@ def find_components(
     """
     uf = UnionFind(coordinates.shape[0])
     neighbors = find_neighbors(coordinates)
-    distances = cdist(center[None], coordinates).flatten()
+    distances = ssp.distance.cdist(center[None], coordinates).flatten()
     for x in np.argsort(distances):
         for n in neighbors[x]:
             if n != x:

@@ -6,10 +6,10 @@ Created on Fri May  7 13:06:21 2021
 """
 
 
+# 2. Third-party library imports
 import numpy as np
-import skimage.transform as skt
-
 from pystackreg import StackReg
+import skimage.transform as skt
 
 
 # Instantiate registration machinery from pystackreg.

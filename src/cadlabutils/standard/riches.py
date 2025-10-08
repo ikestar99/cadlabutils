@@ -6,16 +6,19 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
+# 1. Standard library imports
 import time
+
+# 2. Third-party library imports
 import pandas as pd
-import rich.progress as rp
-
-from rich.text import Text
-from rich.tree import Tree
-from rich.table import Table
 from rich.console import Console
+import rich.progress as rp
+from rich.table import Table
+from rich.text import Text
 from rich.traceback import install
+from rich.tree import Tree
 
+# 3. Local application / relative imports
 from .console import elapsed_time
 
 

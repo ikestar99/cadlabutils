@@ -6,13 +6,16 @@
 """
 
 
+# 1. Standard library imports
+from pathlib import Path
+
+# 2. Third-party library imports
 import numpy as np
 import pandas as pd
-
-from pathlib import Path
-from torch.utils.data import Dataset
 from sklearn.model_selection import StratifiedGroupKFold
+from torch.utils.data import Dataset
 
+# 3. Local application / relative imports
 import cadlabutils as cdu
 
 

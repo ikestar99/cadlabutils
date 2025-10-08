@@ -6,9 +6,11 @@ Created on Wed Apr 30 09:00:00 2025
 """
 
 
+# 2. Third-party library imports
 import torch
 import torch.nn as nn
 
+# 3. Local application / relative imports
 from .. import make_block, make_dense
 
 

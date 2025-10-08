@@ -6,17 +6,20 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
-import numpy as np
-import torch
-import torch.nn as nn
-
+# 1. Standard library imports
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+# 2. Third-party library imports
+import numpy as np
+import pandas as pd
+import torch
+import torch.nn as nn
+
+# 3. Local application / relative imports
 import cadlabutils as cdu
 import cadlabutils.files as cdu_f
-
-from .. import utils, metrics
+from .. import metrics, utils
 
 
 class CoreTrainer(ABC):
@@ -41,7 +44,7 @@ class CoreTrainer(ABC):
         Hardware device used for inference.
     dtypes : tuple[torch.dtype, torch.dtype]
         Data typed of model and ground truth data.
-    model_path : Path
+    curr_path : Path
         Path where model parameters are stored.
     fold : int
         Current k-fold fold.
@@ -58,6 +61,8 @@ class CoreTrainer(ABC):
         Keyword arguments passed to `model` init.
     out_dir : pathlib.Path
         Directory in which to save training related files.
+    name : str
+        Unique identifier for current model.
     criterion : type, optional
         Loss function class.
         Defaults to torch.nn.CrossEntropyLoss.
@@ -84,6 +89,9 @@ class CoreTrainer(ABC):
     scheduler_kwargs : dict, optional
         Keyword arguments passed to `scheduler` init.
         Defaults to {"patience": 5}.
+    pbar : cdu.TreeBar, optional
+        Progress bar displaying current epoch information.
+        Defaults to None, in which case no epoch progress bar is displayed.
 
     See Also
     --------
@@ -98,13 +106,17 @@ class CoreTrainer(ABC):
     {"patience": dummy_epochs} where `dummy_epochs` is an integer larger than
     the number of epochs planned during training.
     """
-    _BAR, _RAM, _GPU, _GPR = None, None, None, None
+    _RAM, _GPU, _GPR = None, None, None
+    _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
+    COLS = [
+        "model", "name", "fold", "curve", "n", "epoch", "mode", "loss", "acc"]
 
     def __init__(
             self,
             model: nn.Module,
             model_kwargs: dict,
             out_dir: Path,
+            name: str,
             criterion: type = nn.CrossEntropyLoss,
             optimizer: type = torch.optim.Adam,
             scheduler: type = torch.optim.lr_scheduler.ReduceLROnPlateau,
@@ -113,23 +125,35 @@ class CoreTrainer(ABC):
             criterion_kwargs: dict = None,
             optimizer_kwargs: dict = None,
             scheduler_kwargs: dict = None,
+            pbar: cdu.TreeBar = None,
     ):
+        name = cdu.clean_name(Path(name)).stem
+
         # set instance variables
         self.device = utils.get_device(gpu)
         self.dtypes = dtypes
-        self.model_path = out_dir.joinpath("model.safetensors")
-        self.fold, self.curve, self.batch_size = 0, 0, None
+        self.curr_path = out_dir.joinpath(f"{name}_ckpt.safetensors")
+        self.peak_path = out_dir.joinpath(f"{name}_peak.safetensors")
+        self.stat_csv = out_dir.joinpath(f"{name}_stats.csv")
+        self.batch_size = None
+        self.pbar = pbar
         self.v_min, self.v_max = None, 0
+        self.names, self.coords = [model.__name__, name], [0, 0]
+
+        # load data from prior model runs
+        self.stat = None
+        if self.stat_csv.is_file():
+            stat = pd.read_csv(self.stat_csv)
+            self.stat = stat[(stat[self.COLS[:2]] == self.names).all(axis=1)]
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
-            "model": (model, model_kwargs),
-            "criterion": (criterion, criterion_kwargs or {}),
-            "optimizer": (optimizer, {"lr": 1e-3, **(optimizer_kwargs or {})}),
-            "scheduler": (
-                scheduler, {"patience": 5, **(scheduler_kwargs or {})})}
+            self._M: (model, model_kwargs),
+            self._C: (criterion, criterion_kwargs or {}),
+            self._O: (optimizer, {"lr": 1e-3, **(optimizer_kwargs or {})}),
+            self._S: (scheduler, {"patience": 5, **(scheduler_kwargs or {})})}
 
-        config_yaml = out_dir.joinpath("config.yaml")
+        config_yaml = out_dir.joinpath(f"{name}_config.yaml")
         if config_yaml.is_file():  # load existing configuration
             config = cdu_f.yamls.from_yaml(config_yaml)
             for k, (_, v) in config.items():
@@ -176,10 +200,7 @@ class CoreTrainer(ABC):
     def _epoch_reset(
             self,
             epoch: int,
-            train: bool,
-            samples: int,
-            loss: float,
-            accuracy: float
+            train: bool
     ):
         """Reset instance state after completing an epoch.
 
@@ -189,16 +210,12 @@ class CoreTrainer(ABC):
             Current epoch number.
         train : bool
             If True, training epoch. If False, validation epoch.
-        samples : int
-            Number of samples in current dataset.
-        loss : float
-            Mean loss value across current dataset.
-        accuracy : tuple[float, float]
-            Mean accuracy value across current dataset..
 
         Notes
         -----
         Must be implemented by child classes.
+        Each instance has a `coords` attribute, a list of [fold, curve]
+        indices.
         """
         pass
 
@@ -218,51 +235,41 @@ class CoreTrainer(ABC):
     def _track_memory(
             self
     ):
-        """Track resource consumption on CPU and CUDA device if available.
-
-        See Also
-        --------
-        cadlabutils.TreeBar
-
-        Notes
-        -----
-        Depends on class attribute `_BAR`, which is a `Treebar` instance set
-        during the training loop.
-        """
-        if self._BAR is None:
+        """Track resource consumption on CPU and CUDA device if available."""
+        if self.pbar is None:
             return
 
         r_u, r_t = cdu.get_ram(scale=3)
         self._RAM = (
-            self._BAR.add_task(
+            self.pbar.add_task(
                 "RAM use (GiB)", tabs=1, total=r_t, show_time=False)
             if self._RAM is None else self._RAM)
-        self._BAR.update(self._RAM, completed=r_u)
+        self.pbar.update(self._RAM, completed=r_u)
         if self. device.type == "cpu":
             return
 
         g_u, g_r, g_t = utils.get_cuda_memory(self.device, scale=3)
         if self._GPU is None:
-            self._GPU = self._BAR.add_task(
+            self._GPU = self.pbar.add_task(
                 "GPU use (GiB)", tabs=2, total=g_t, show_time=False)
-            self._GPR = self._BAR.add_task(
+            self._GPR = self.pbar.add_task(
                 "GPU res (GiB)", tabs=2, total=g_t, show_time=False)
 
-        self._BAR.update(self._RAM, completed=r_u)
-        self._BAR.update(self._GPR, completed=g_r)
+        self.pbar.update(self._RAM, completed=r_u)
+        self.pbar.update(self._GPR, completed=g_r)
 
     def _initialize(
             self
     ):
         """Reinitialize trainable parameters."""
-        self.model = self._cfg["model"][0](**self._cfg["model"][1])
+        self.model = self._cfg[self._M][0](**self._cfg[self._M][1])
         utils.set_mode(
             self.model, train=True, device=self.device, dtype=self.dtypes[0])
-        self.criterion = self._cfg["criterion"][0](**self._cfg["criterion"][1])
-        self.optimizer = self._cfg["optimizer"][0](
-            params=self.model.parameters(), **self._cfg["optimizer"][1])
-        self.scheduler = self._cfg["scheduler"][0](
-            optimizer=self.optimizer, **self._cfg["scheduler"][1])
+        self.criterion = self._cfg[self._C][0](**self._cfg[self._C][1])
+        self.optimizer = self._cfg[self._O][0](
+            params=self.model.parameters(), **self._cfg[self._O][1])
+        self.scheduler = self._cfg[self._S][0](
+            optimizer=self.optimizer, **self._cfg[self._S][1])
 
     def _step(
             self,
@@ -358,9 +365,14 @@ class CoreTrainer(ABC):
 
         # compute statistics and clean up after epoch
         agg_loss, agg_acc = np.mean(np.array(r_stats), axis=0)
-        self._epoch_reset(
-            epoch, train=train, samples=len(loader.dataset), loss=agg_loss,
-            accuracy=agg_acc)
+        self._epoch_reset(epoch, train=train)
+
+        # save data
+        mode = "train" if train else "valid"
+        data = [len(loader.dataset), epoch, mode, agg_loss, agg_acc]
+        stats = pd.DataFrame(
+            [self.names + self.coords + data], columns=self.COLS, index=[0])
+        cdu_f.csvs.append_data(file=self.stat_csv, data=stats, index=False)
         return agg_loss, agg_acc
 
     def train(
@@ -370,10 +382,9 @@ class CoreTrainer(ABC):
         epochs: int,
         fold: int = 0,
         curve: int = 0,
-        pbar: cdu.TreeBar = None,
         task_id: cdu.rp.TaskID = None,
         min_iter: int = 100,
-        save: str = "loss"
+        use_acc: bool = True
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -396,18 +407,16 @@ class CoreTrainer(ABC):
 
         Other Parameters
         ----------------
-        pbar : cdu.TreeBar, optional
-            Progress bar displaying current epoch information.
-            Defaults to None, in which case no epoch progress bar is displayed.
         task_id : cdu.rp.TaskID, optional
-            Index of epoch progress bar in `tree_bar`.
+            Index of epoch progress bar in instance attribute `pbar`.
             Defaults to None.
         min_iter : int, optional
             Minimum allowed iterations in an epoch. Useful if optimum batch
             size is much larger than dataset size.
-        save : {"loss", "acc", "both"}, optional
-            Metric with which to evaluate current model for saving.
-            Defaults to "loss".
+        use_acc : bool, optional
+            If True, consider increasing accuracy in addition to decreasing
+            loss when saving model.
+            Defaults to True.
 
         Notes
         -----
@@ -415,9 +424,9 @@ class CoreTrainer(ABC):
         that returns an iterable with at least two indices. The first index is
         used as input data while the second index serves as the target.
         """
-        self.fold, self.curve, self._BAR = fold, curve, pbar
-        op, sc = "optimizer", "scheduler"
-        epoch, t_max, t_min = 0, 0, None
+        self.coords, epoch = [fold, curve], 0
+        v_min, v_max = None, None if self.stat is None else self.stat[
+            self.stat[self.COLS[6]] == "valid"][self.COLS[7:]].max().to_numpy()
 
         self._initialize()
         self._track_memory()
@@ -430,22 +439,23 @@ class CoreTrainer(ABC):
             self.batch_size = min(
                 self.batch_size, len(train_dataset) // min_iter)
 
-        if self.model_path.is_file():  # load model-specific checkpoint
-            extras = utils.load(
-                self.model_path, self.model, device=self.device,
-                load_dict={op: self.optimizer, sc: self.scheduler})
+        # load model-specific checkpoint if available
+        if self.curr_path.is_file() and self.stat is not None:
+            stat = self.stat[
+                (self.stat[self.COLS[2:4]] == self.coords).all(axis=1)]
 
-            if fold < extras["fold"]:  # skip if current fold completed
-                print(f"skipping completed fold {fold}")
-                return
-            elif fold == extras["fold"] and curve < extras["curve"]:
-                print(f"skipping completed fold {fold} curve {curve}")
-                return
-            elif fold == extras["fold"] and curve == extras["curve"]:
-                epoch = extras["epoch"] + 1
-                print(f"Resuming training at epoch {epoch}")
-            else:  # fresh model run
-                self._initialize()
+            # only load if there is a model with the same fold and curve index
+            if not stat.empty:
+                epoch = stat[self.COLS[5]].max() + 1
+                if epoch < epochs:  # ... with an incomplete training loop
+                    print(f"resuming fold {fold} curve {curve} epoch {epoch}")
+                    utils.load(
+                        self.curr_path, self.model, device=self.device,
+                        load_dict={
+                            self._O: self.optimizer, self._S: self.scheduler})
+                else:  # skip otherwise
+                    print(f"skipping fold {fold} curve {curve}")
+                    return
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
@@ -458,30 +468,28 @@ class CoreTrainer(ABC):
 
             # modify learning rate based on validation loss
             self.scheduler.step(v_loss)
-            t_min = t_loss if t_min is None else min(t_loss, t_min)
-            self.v_min = v_loss if self.v_min is None else min(
-                v_loss, self.v_min)
-            t_max = max(t_acc, t_max)
-            self.v_max = max(v_acc, self.v_max)
+
+            # save current checkpoint to resume if training pauses
+            utils.save(self.curr_path, self.model, save_dict={
+                self._O: self.optimizer, self._S: self.scheduler})
 
             # save model if peak validation performance
-            if self._BAR is not None:
-                label = f"{len(train_loader)} batches of {self.batch_size}"
-                pbar.start_task(task_id)
-                pbar.update(task_id, label=label, completed=e + 1)
-            check = [v_loss <= self.v_min] if save in ("loss", "both") else []
-            check += [v_acc >= self.v_max] if save in ("acc", "both") else []
-            if all(check):
+            check = {"curr_loss": v_loss, "best_loss": v_min}
+            check.update(
+                {"curr_acc": v_acc, "best_acc": v_max} if use_acc else {})
+            if utils.is_better(**check):
+                v_min, v_max = v_loss, v_acc
                 message = f"Saving fold {fold} curve {curve} epoch {e}"
-                message += f"\n    validation: loss {v_loss:.4e}"
-                message += (
-                    f"\n    validation: accuracy {100 * v_acc:.2f}"
-                    if save in ("acc", "both") else "")
+                message += f"\n    validation loss: {v_loss:.4e}"
+                message += f"\n    validation metric {v_acc:.4e}"
                 print(message)
-                utils.save(
-                    self.model_path, self.model,
-                    save_dict={op: self.optimizer, sc: self.scheduler},
-                    epoch=e, fold=fold, curve=curve)
+                utils.save(self.peak_path, self.model)
+
+            # update progress bar
+            if self.pbar is not None:
+                label = f"{len(train_loader)} batches of {self.batch_size}"
+                self.pbar.start_task(task_id)
+                self.pbar.update(task_id, label=label, completed=e + 1)
 
         self._make_plots()
         del train_loader, valid_loader
@@ -492,7 +500,6 @@ class CoreTrainer(ABC):
             self,
             eval_dataset: torch.utils.data.Dataset,
             batch_size: int = 10,
-            pbar: cdu.TreeBar = None,
             task_id: cdu.rp.TaskID = None,
     ):
         """Inference on unlabeled data with trained model.
@@ -513,11 +520,8 @@ class CoreTrainer(ABC):
 
         Other Parameters
         ----------------
-        pbar : cdu.TreeBar, optional
-            Progress bar displaying current epoch information.
-            Defaults to None, in which case no epoch progress bar is displayed.
         task_id : cdu.rp.TaskID, optional
-            Index of epoch progress bar in `tree_bar`.
+            Index of epoch progress bar in instance attribute `pbar`.
             Defaults to None.
 
         Notes
@@ -527,20 +531,20 @@ class CoreTrainer(ABC):
         used as input data while the second index serves as the target.
         """
         self._initialize()
-        utils.load(self.model_path, self.model, device=self.device)
+        utils.load(self.peak_path, self.model, device=self.device)
         utils.set_mode(
             self.model, train=False, device=self.device, dtype=self.dtypes[0])
         eval_loader = utils.get_dataloader(
                 eval_dataset, batch_size=batch_size, shuffle=False)
-        if pbar is not None:
-            pbar.start_task(task_id)
-            pbar.update(task_id, total=len(eval_loader))
+        if self.pbar is not None:
+            self.pbar.start_task(task_id)
+            self.pbar.update(task_id, total=len(eval_loader))
 
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
                 self.model, batch, device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            if pbar is not None:
-                pbar.update(task_id, advance=1)
+            if self.pbar is not None:
+                self.pbar.update(task_id, advance=1)
 
             yield b * batch_size, output.detach().cpu().numpy()

@@ -6,11 +6,13 @@ Created on Wed Jan 22 09:00:00 2025
 """
 
 
-import numpy as np
-import natsort
-import tifffile as tf
-
+# 1. Standard library imports
 from pathlib import Path
+
+# 2. Third-party library imports
+import natsort
+import numpy as np
+import tifffile as tf
 
 
 def save_tif(

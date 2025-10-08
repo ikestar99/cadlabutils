@@ -6,7 +6,9 @@ Created on Wed Aug 06 09:00:00 2025
 """
 
 
+# 3. Local application / relative imports
 from .paths import *
 from .plots import *
 from .riches import *
 from .console import *
+from .arithmetic import *
