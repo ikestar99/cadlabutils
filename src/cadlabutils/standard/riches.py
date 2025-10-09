@@ -22,8 +22,7 @@ from rich.tree import Tree
 from .console import elapsed_time
 
 
-install(
-    show_locals=True, width=120, suppress=["numpy", "pandas", "torch"])
+install(show_locals=True, width=120, suppress=["numpy", "pandas", "torch"])
 
 
 def pbar(
