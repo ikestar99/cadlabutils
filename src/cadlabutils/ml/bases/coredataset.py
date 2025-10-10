@@ -187,6 +187,7 @@ class CoreDataset(Dataset):
     - - - - - - - - - - - - - -
     """
     _INDEX = "_data_index"
+    _DIR = "datasets"
 
     def __init__(
             self,

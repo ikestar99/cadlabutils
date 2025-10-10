@@ -128,6 +128,7 @@ class CoreTrainer(ABC):
             pbar: cdu.TreeBar = None,
     ):
         name = cdu.clean_name(Path(name)).stem
+        out_dir = out_dir.joinpath("models")
 
         # set instance variables
         self.device = utils.get_device(gpu)
@@ -153,12 +154,15 @@ class CoreTrainer(ABC):
             self._O: (optimizer, {"lr": 1e-3, **(optimizer_kwargs or {})}),
             self._S: (scheduler, {"patience": 5, **(scheduler_kwargs or {})})}
 
+        # load existing configuration
         config_yaml = out_dir.joinpath(f"{name}_config.yaml")
-        if config_yaml.is_file():  # load existing configuration
+        if config_yaml.is_file():
             config = cdu_f.yamls.from_yaml(config_yaml)
             for k, (_, v) in config.items():
                 self._cfg[k] = (self._cfg[k][0], v)
-        else:  # save configuration for reuse
+
+        # save configuration for reuse
+        else:
             out_dir.mkdir(exist_ok=True, parents=True)
             cdu_f.yamls.to_yaml(
                 config_yaml, {
