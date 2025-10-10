@@ -128,7 +128,6 @@ class CoreTrainer(ABC):
             pbar: cdu.TreeBar = None,
     ):
         name = cdu.clean_name(Path(name)).stem
-        out_dir = out_dir.joinpath("models")
 
         # set instance variables
         self.device = utils.get_device(gpu)
