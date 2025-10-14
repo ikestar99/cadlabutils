@@ -144,14 +144,16 @@ class CoreTrainer(ABC):
         self.stat = None
         if self.stat_csv.is_file():
             stat = pd.read_csv(self.stat_csv)
-            self.stat = stat[(stat[self.COLS[:2]] == self.names).all(axis=1)]
+            self.stat = stat.loc[
+                (stat[self.COLS[0]] == self.names[0]) &
+                (stat[self.COLS[1]] == self.names[1])]
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
             self._M: (model, model_kwargs),
             self._C: (criterion, criterion_kwargs or {}),
             self._O: (optimizer, {"lr": 1e-3, **(optimizer_kwargs or {})}),
-            self._S: (scheduler, {"patience": 5, **(scheduler_kwargs or {})})}
+            self._S: (scheduler, {"patience": 1, **(scheduler_kwargs or {})})}
 
         # load existing configuration
         config_yaml = out_dir.joinpath(f"{name}_config.yaml")
@@ -444,8 +446,9 @@ class CoreTrainer(ABC):
 
         # load model-specific checkpoint if available
         if self.curr_path.is_file() and self.stat is not None:
-            stat = self.stat[
-                (self.stat[self.COLS[2:4]] == self.coords).all(axis=1)]
+            stat = self.stat.loc[
+                (self.stat[self.COLS[2]] == self.coords[0]) &
+                (self.stat[self.COLS[3]] == self.coords[1])]
 
             # only load if there is a model with the same fold and curve index
             if not stat.empty:
