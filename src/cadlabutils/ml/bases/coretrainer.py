@@ -128,13 +128,15 @@ class CoreTrainer(ABC):
             pbar: cdu.TreeBar = None,
     ):
         name = cdu.clean_name(Path(name)).stem
+        out_dir = out_dir.joinpath("models")
+        my_dir = out_dir.joinpath(name)
 
         # set instance variables
         self.device = utils.get_device(gpu)
         self.dtypes = dtypes
-        self.curr_path = out_dir.joinpath(f"{name}_ckpt.safetensors")
-        self.peak_path = out_dir.joinpath(f"{name}_peak.safetensors")
-        self.stat_csv = out_dir.joinpath(f"{name}_stats.csv")
+        self.curr_path = my_dir.joinpath(f"{name}_ckpt.safetensors")
+        self.peak_path = my_dir.joinpath(f"{name}_peak.safetensors")
+        self.stat_csv = out_dir.joinpath("coretrainer_stats.csv")
         self.batch_size = None
         self.pbar = pbar
         self.v_min, self.v_max = None, 0
