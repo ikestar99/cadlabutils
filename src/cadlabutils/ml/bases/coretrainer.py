@@ -129,13 +129,13 @@ class CoreTrainer(ABC):
     ):
         name = cdu.clean_name(Path(name)).stem
         out_dir = out_dir.joinpath("models")
-        my_dir = out_dir.joinpath(name)
+        self.my_dir = out_dir.joinpath(name)
 
         # set instance variables
         self.device = utils.get_device(gpu)
         self.dtypes = dtypes
-        self.curr_path = my_dir.joinpath(f"{name}_ckpt.safetensors")
-        self.peak_path = my_dir.joinpath(f"{name}_peak.safetensors")
+        self.curr_path = self.my_dir.joinpath(f"{name}_ckpt.safetensors")
+        self.peak_path = self.my_dir.joinpath(f"{name}_peak.safetensors")
         self.stat_csv = out_dir.joinpath("coretrainer_stats.csv")
         self.batch_size = None
         self.pbar = pbar
@@ -158,7 +158,7 @@ class CoreTrainer(ABC):
             self._S: (scheduler, {"patience": 1, **(scheduler_kwargs or {})})}
 
         # load existing configuration
-        config_yaml = out_dir.joinpath(f"{name}_config.yaml")
+        config_yaml = self.my_dir.joinpath(f"{name}_config.yaml")
         if config_yaml.is_file():
             config = cdu_f.yamls.from_yaml(config_yaml)
             for k, (_, v) in config.items():
@@ -166,7 +166,7 @@ class CoreTrainer(ABC):
 
         # save configuration for reuse
         else:
-            out_dir.mkdir(exist_ok=True, parents=True)
+            self.my_dir.mkdir(exist_ok=True, parents=True)
             cdu_f.yamls.to_yaml(
                 config_yaml, {
                     k: [f"{c.__module__}.{c.__qualname__}", d]
@@ -391,7 +391,8 @@ class CoreTrainer(ABC):
         curve: int = 0,
         task_id: cdu.rp.TaskID = None,
         min_iter: int = 100,
-        use_acc: bool = True
+        use_acc: bool = True,
+        save_best: bool = True
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -423,6 +424,9 @@ class CoreTrainer(ABC):
         use_acc : bool, optional
             If True, consider increasing accuracy in addition to decreasing
             loss when saving model.
+            Defaults to True.
+        save_best : bool, optional
+            If True, save best model as dedicated file.
             Defaults to True.
 
         Notes
@@ -485,7 +489,7 @@ class CoreTrainer(ABC):
             check = {"curr_loss": v_loss, "best_loss": v_min}
             check.update(
                 {"curr_acc": v_acc, "best_acc": v_max} if use_acc else {})
-            if utils.is_better(**check):
+            if save_best and utils.is_better(**check):
                 v_min, v_max = v_loss, v_acc
                 message = f"Saving fold {fold} curve {curve} epoch {e}"
                 message += f"\n    validation loss: {v_loss:.4e}"
