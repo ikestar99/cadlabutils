@@ -109,7 +109,8 @@ class CoreTrainer(ABC):
     _RAM, _GPU, _GPR = None, None, None
     _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
     COLS = [
-        "model", "name", "fold", "curve", "n", "epoch", "mode", "loss", "acc"]
+        "trainer", "model", "name", "fold", "curve", "n", "epoch", "mode",
+        "loss", "acc"]
 
     def __init__(
             self,
@@ -140,7 +141,8 @@ class CoreTrainer(ABC):
         self.batch_size = None
         self.pbar = pbar
         self.v_min, self.v_max = None, 0
-        self.names, self.coords = [model.__name__, name], [0, 0]
+        self.names = [self.__class__.__name__, model.__name__, name]
+        self.coords = [0, 0]
 
         # load data from prior model runs
         self.stat = None
@@ -148,7 +150,8 @@ class CoreTrainer(ABC):
             stat = pd.read_csv(self.stat_csv)
             self.stat = stat.loc[
                 (stat[self.COLS[0]] == self.names[0]) &
-                (stat[self.COLS[1]] == self.names[1])]
+                (stat[self.COLS[1]] == self.names[1]) &
+                (stat[self.COLS[2]] == self.names[2])]
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
@@ -436,8 +439,11 @@ class CoreTrainer(ABC):
         used as input data while the second index serves as the target.
         """
         self.coords, epoch = [fold, curve], 0
-        v_min, v_max = None, None if self.stat is None else self.stat[
-            self.stat[self.COLS[6]] == "valid"][self.COLS[7:]].max().to_numpy()
+        v_min_loss, v_max_acc = None, None
+        if self.stat is not None:
+            subset = self.stat.query(f"{self.COLS[7]} == 'valid'")
+            v_min_loss = subset[self.COLS[-2]].min()
+            v_max_acc = subset[self.COLS[-1]].max()
 
         self._initialize()
         self._track_memory()
@@ -452,13 +458,13 @@ class CoreTrainer(ABC):
 
         # load model-specific checkpoint if available
         if self.curr_path.is_file() and self.stat is not None:
-            stat = self.stat.loc[
-                (self.stat[self.COLS[2]] == self.coords[0]) &
-                (self.stat[self.COLS[3]] == self.coords[1])]
+            subset = self.stat.loc[
+                (self.stat[self.COLS[3]] == self.coords[0]) &
+                (self.stat[self.COLS[4]] == self.coords[1])]
 
             # only load if there is a model with the same fold and curve index
-            if not stat.empty:
-                epoch = stat[self.COLS[5]].max() + 1
+            if not subset.empty:
+                epoch = subset[self.COLS[6]].max() + 1
                 if epoch < epochs:  # ... with an incomplete training loop
                     print(f"resuming fold {fold} curve {curve} epoch {epoch}")
                     utils.load(
@@ -486,11 +492,11 @@ class CoreTrainer(ABC):
                 self._O: self.optimizer, self._S: self.scheduler})
 
             # save model if peak validation performance
-            check = {"curr_loss": v_loss, "best_loss": v_min}
+            check = {"curr_loss": v_loss, "best_loss": v_min_loss}
             check.update(
-                {"curr_acc": v_acc, "best_acc": v_max} if use_acc else {})
+                {"curr_acc": v_acc, "best_acc": v_max_acc} if use_acc else {})
             if save_best and utils.is_better(**check):
-                v_min, v_max = v_loss, v_acc
+                v_min_loss, v_max_acc = v_loss, v_acc
                 message = f"Saving fold {fold} curve {curve} epoch {e}"
                 message += f"\n    validation loss: {v_loss:.4e}"
                 message += f"\n    validation metric {v_acc:.4e}"
