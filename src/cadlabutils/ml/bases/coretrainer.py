@@ -281,6 +281,17 @@ class CoreTrainer(ABC):
         self.scheduler = self._cfg[self._S][0](
             optimizer=self.optimizer, **self._cfg[self._S][1])
 
+    def _clean_up(
+            self
+    ):
+        """Clean up after inference."""
+        del self.model, self.criterion, self.optimizer, self.scheduler
+        if self.curr_path.is_file():
+            self.curr_path.unlink()
+            self.curr_path.with_suffix(".pth").unlink()
+
+        torch.cuda.empty_cache()
+
     def _step(
             self,
             sample: torch.tensor,
@@ -312,8 +323,8 @@ class CoreTrainer(ABC):
         -----
         Simple wrapper around `utils.forward_pass` utility function. For more
         complex training paradigms, subclasses should override this method with
-        custom logic to account for different input and output structures. Any
-        such function must:
+        custom logic to account for different input and output structures.
+        Any such function must:
         -   Accept 3 input arguments, `sample`, `target`, and `train`.
             The former two do not need to be tensors. The last, `train`, is a
             ``bool`` that set model to train mode for training and eval mode
@@ -395,7 +406,8 @@ class CoreTrainer(ABC):
         task_id: cdu.rp.TaskID = None,
         min_iter: int = 100,
         use_acc: bool = True,
-        save_best: bool = True
+        save_best: bool = True,
+        trial: object = None
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -431,6 +443,8 @@ class CoreTrainer(ABC):
         save_best : bool, optional
             If True, save best model as dedicated file.
             Defaults to True.
+        trial : optuna.trial.Trial, optional
+            Optuna trial object used for hyperparameter optimization.
 
         Notes
         -----
@@ -498,8 +512,8 @@ class CoreTrainer(ABC):
             if save_best and utils.is_better(**check):
                 v_min_loss, v_max_acc = v_loss, v_acc
                 message = f"Saving fold {fold} curve {curve} epoch {e}"
-                message += f"\n    validation loss: {v_loss:.4e}"
-                message += f"\n    validation metric {v_acc:.4e}"
+                message += f"\n    loss: {v_loss:.4e}"
+                message += f"\n    metric {v_acc:.4e}" if use_acc else ""
                 print(message)
                 utils.save(self.peak_path, self.model)
 
@@ -509,20 +523,27 @@ class CoreTrainer(ABC):
                 self.pbar.start_task(task_id)
                 self.pbar.update(task_id, label=label, completed=e + 1)
 
+            # optional optuna hyperparameter optimization
+            if trial is not None:
+                trial.report(v_acc if use_acc else v_loss, step=e)
+                if trial.should_prune():
+                    del train_loader, valid_loader
+                    self._clean_up()
+                    if self.pbar is not None:
+                        self.pbar.stop_task(task_id)
+
         self._make_plots()
 
         # remove within-loop values from memory
         del train_loader, valid_loader
-        del self.model, self.criterion, self.optimizer, self.scheduler
-        self.curr_path.unlink()
-        self.curr_path.with_suffix(".pth").unlink()
-        torch.cuda.empty_cache()
+        self._clean_up()
 
     def evaluate(
             self,
             eval_dataset: torch.utils.data.Dataset,
             batch_size: int = 10,
             task_id: cdu.rp.TaskID = None,
+            in_idx: int | str = slice(None)
     ):
         """Inference on unlabeled data with trained model.
 
@@ -545,6 +566,10 @@ class CoreTrainer(ABC):
         task_id : cdu.rp.TaskID, optional
             Index of epoch progress bar in instance attribute `pbar`.
             Defaults to None.
+        in_idx : int | str, optional
+            Index of each sample in `eval_dataset` to use for inference.
+            Defaults to `slice(None)`, in which case the entirety of each
+            sample is used as model input.
 
         Notes
         -----
@@ -564,9 +589,12 @@ class CoreTrainer(ABC):
 
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
-                self.model, batch, device=self.device,
+                self.model, batch[in_idx], device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
             if self.pbar is not None:
                 self.pbar.update(task_id, advance=1)
 
             yield b * batch_size, output.detach().cpu().numpy()
+
+        del eval_loader
+        self._clean_up()
