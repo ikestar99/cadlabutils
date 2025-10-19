@@ -86,10 +86,8 @@ class CoreTrainer(ABC):
         Keyword arguments passed to `criterion` init.
     optimizer_kwargs : dict, optional
         Keyword arguments passed to `optimizer` init.
-        Defaults to {"lr": 1e-3"}.
     scheduler_kwargs : dict, optional
         Keyword arguments passed to `scheduler` init.
-        Defaults to {"patience": 5}.
     pbar : cdu.TreeBar, optional
         Progress bar displaying current epoch information.
         Defaults to None, in which case no epoch progress bar is displayed.
@@ -157,8 +155,8 @@ class CoreTrainer(ABC):
         self._cfg = {
             self._M: (model, model_kwargs),
             self._C: (criterion, criterion_kwargs or {}),
-            self._O: (optimizer, {"lr": 1e-3, **(optimizer_kwargs or {})}),
-            self._S: (scheduler, {"patience": 1, **(scheduler_kwargs or {})})}
+            self._O: (optimizer, optimizer_kwargs or {}),
+            self._S: (scheduler, scheduler_kwargs or {})}
 
         # load existing configuration
         config_yaml = self.my_dir.joinpath(f"{name}_config.yaml")
