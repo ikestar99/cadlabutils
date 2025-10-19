@@ -8,6 +8,7 @@ Created on Wed Jan 22 09:00:00 2025
 
 # 1. Standard library imports
 from abc import ABC, abstractmethod
+import time
 from pathlib import Path
 
 # 2. Third-party library imports
@@ -110,7 +111,7 @@ class CoreTrainer(ABC):
     _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
     COLS = [
         "trainer", "model", "name", "fold", "curve", "n", "epoch", "mode",
-        "loss", "acc"]
+        "time", "loss", "acc"]
 
     def __init__(
             self,
@@ -140,7 +141,6 @@ class CoreTrainer(ABC):
         self.stat_csv = out_dir.joinpath("coretrainer_stats.csv")
         self.batch_size = None
         self.pbar = pbar
-        self.v_min, self.v_max = None, 0
         self.names = [self.__class__.__name__, model.__name__, name]
         self.coords = [0, 0]
 
@@ -379,18 +379,20 @@ class CoreTrainer(ABC):
         r_stats = []
         for sample, target in loader:
             # forward pass, backpropagation, optimization, and statistics
+            delta = time.time()
             output, loss, target = self._step(sample, target, train=train)
-            r_stats += [[loss.item(), self._step_stats(output, target)]]
+            delta = (time.time() - delta) / sample.size(dim=0)
+            r_stats += [[delta, loss.item(), self._step_stats(output, target)]]
             self._track_memory()
             del output, loss, target
 
         # compute statistics and clean up after epoch
-        agg_loss, agg_acc = np.mean(np.array(r_stats), axis=0)
+        agg_time, agg_loss, agg_acc = np.mean(np.array(r_stats), axis=0)
         self._epoch_reset(epoch, train=train)
 
         # save data
         mode = "train" if train else "valid"
-        data = [len(loader.dataset), epoch, mode, agg_loss, agg_acc]
+        data = [len(loader.dataset), epoch, mode, agg_time, agg_loss, agg_acc]
         stats = pd.DataFrame(
             [self.names + self.coords + data], columns=self.COLS, index=[0])
         cdu_f.csvs.append_data(file=self.stat_csv, data=stats, index=False)
