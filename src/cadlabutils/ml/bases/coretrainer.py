@@ -444,7 +444,7 @@ class CoreTrainer(ABC):
         save_best : bool, optional
             If True, save best model as dedicated file.
             Defaults to True.
-        trial : optuna.trial.Trial, optional
+        trial : optuna.Trial, optional
             Optuna trial object used for hyperparameter optimization.
 
         Notes
