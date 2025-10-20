@@ -13,6 +13,7 @@ from pathlib import Path
 
 # 2. Third-party library imports
 import numpy as np
+import optuna
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -280,15 +281,25 @@ class CoreTrainer(ABC):
             optimizer=self.optimizer, **self._cfg[self._S][1])
 
     def _clean_up(
-            self
+            self,
+            task_id: cdu.rp.TaskID = None
     ):
-        """Clean up after inference."""
+        """Clean up after inference.
+
+        Parameters
+        ----------
+        task_id : cdu.rp.TaskID, optional
+            Index of loop progress bar in instance attribute `pbar`.
+            Defaults to None.
+        """
         del self.model, self.criterion, self.optimizer, self.scheduler
+        torch.cuda.empty_cache()
+        self._make_plots()
         if self.curr_path.is_file():
             self.curr_path.unlink()
             self.curr_path.with_suffix(".pth").unlink()
-
-        torch.cuda.empty_cache()
+        if self.pbar is not None and task_id is not None:
+            self.pbar.stop_task(task_id)
 
     def _step(
             self,
@@ -408,7 +419,7 @@ class CoreTrainer(ABC):
         min_iter: int = 100,
         use_acc: bool = True,
         save_best: bool = True,
-        trial: object = None
+        trial: optuna.Trial = None
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -499,10 +510,8 @@ class CoreTrainer(ABC):
             t_loss, t_acc = self._epoch(train_loader, train=True, epoch=e)
             v_loss, v_acc = self._epoch(valid_loader, train=False, epoch=e)
 
-            # modify learning rate based on validation loss
+            # modify learning rate based on validation loss, save checkpoint
             self.scheduler.step(v_loss)
-
-            # save current checkpoint to resume if training pauses
             utils.save(self.curr_path, self.model, save_dict={
                 self._O: self.optimizer, self._S: self.scheduler})
 
@@ -529,15 +538,12 @@ class CoreTrainer(ABC):
                 trial.report(v_acc if use_acc else v_loss, step=e)
                 if trial.should_prune():
                     del train_loader, valid_loader
-                    self._clean_up()
-                    if self.pbar is not None:
-                        self.pbar.stop_task(task_id)
-
-        self._make_plots()
+                    self._clean_up(task_id)
+                    raise optuna.TrialPruned()
 
         # remove within-loop values from memory
         del train_loader, valid_loader
-        self._clean_up()
+        self._clean_up(task_id)
 
     def evaluate(
             self,
@@ -565,7 +571,7 @@ class CoreTrainer(ABC):
         Other Parameters
         ----------------
         task_id : cdu.rp.TaskID, optional
-            Index of epoch progress bar in instance attribute `pbar`.
+            Index of batch progress bar in instance attribute `pbar`.
             Defaults to None.
         in_idx : int | str, optional
             Index of each sample in `eval_dataset` to use for inference.
@@ -598,4 +604,4 @@ class CoreTrainer(ABC):
             yield b * batch_size, output.detach().cpu().numpy()
 
         del eval_loader
-        self._clean_up()
+        self._clean_up(task_id)
