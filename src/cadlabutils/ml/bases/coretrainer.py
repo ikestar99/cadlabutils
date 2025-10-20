@@ -143,7 +143,7 @@ class CoreTrainer(ABC):
         self.coords = [0, 0]
 
         # load data from prior model runs
-        self.stat = None
+        self.stat, self.last = None
         if self.stat_csv.is_file():
             stat = pd.read_csv(self.stat_csv)
             self.stat = stat.loc[
@@ -391,6 +391,7 @@ class CoreTrainer(ABC):
         # save data
         mode = "train" if train else "valid"
         data = [len(loader.dataset), epoch, mode, agg_time, agg_loss, agg_acc]
+        self.last = self.last if train else data[-2:]
         stats = pd.DataFrame(
             [self.names + self.coords + data], columns=self.COLS, index=[0])
         cdu_f.csvs.append_data(file=self.stat_csv, data=stats, index=False)
