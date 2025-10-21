@@ -477,15 +477,16 @@ class CoreDataset(Dataset):
 
     def balance_metadata(
             self,
-            meta_var: str | list[str],
+            meta_var: str | list[str] = None,
             balance: dict[int | float | str | bool, float] = None
     ):
         """Normalize unique metadata prevalence to fixed ratio.
 
         Parameters
         ----------
-        meta_var : str | list[str]
+        meta_var : str | list[str], optional
             Name of metadata variable(s) to balance.
+            Defaults to None, in which case instance `truth_var` is used.
         balance : dict[int | float | str | bool, float], optional
             key : int | float | str | bool
                 Unique combination of `meta_var` metadata values. If `meta_var`
@@ -508,6 +509,8 @@ class CoreDataset(Dataset):
         --------
         get_metadata : Used to splice metadata values within sample.
         """
+        meta_var = meta_var or self.truth_var
+
         # calculate existing distribution
         metadata = self.get_metadata(meta_var)
         counts = {k: v for k, v in
@@ -572,6 +575,7 @@ class CoreDataset(Dataset):
             n_folds: int,
             stratify: list[str] = None,
             grouping: list[str] = None,
+            add_truth: bool = True,
             shuffle: bool = True,
             random_state: int = 42
     ):
@@ -587,12 +591,6 @@ class CoreDataset(Dataset):
         grouping : list[str], optional
             Metadata variables against which to group splits.
             Defaults to None, in which case data are not grouped.
-        shuffle : bool, optional
-            Whether to shuffle before splitting.
-            Defaults to True.
-        random_state : int
-            Random seed for reproducibility.
-            Defaults to 42.
 
         Yields
         ------
@@ -600,6 +598,18 @@ class CoreDataset(Dataset):
             Data for current training split.
         v_set : CoreDataset
             Data for current test set.
+        
+        Other Parameters
+        ----------------
+        add_truth : bool, optional
+            If True, include instance `truth_var` as stratification variable.
+            Defaults to True.
+        shuffle : bool, optional
+            Whether to shuffle before splitting.
+            Defaults to True.
+        random_state : int
+            Random seed for reproducibility.
+            Defaults to 42.
 
         Raises
         ------
@@ -622,12 +632,15 @@ class CoreDataset(Dataset):
         the training split, while `grouping` is used to evaluate if a given
         model generalizes to data excluded from training.
         """
-        # create composite metadata variable for stratification and grouping
+        # create composite metadata variables for stratification and grouping
+        stratify = stratify if self.truth_var is None or not add_truth else (
+            [self.truth_var] if stratify is None else
+            list(set(stratify + [self.truth_var])))
         strat = np.ones(len(self)) if stratify is None else self.get_metadata(
             stratify)
         group = (
-            np.arange(len(self)) if grouping is None else self.get_metadata(
-                grouping))
+            np.arange(len(self)) if grouping is None else
+            self.get_metadata(grouping))
 
         # verify adequate data per strata for desired number of groups
         _, counts = np.unique(stratify, return_counts=True)
