@@ -14,8 +14,8 @@ try:
     from .utils import *
     from .modules import *
     from .metrics import *
-
     from .bases import *
     from .convnets import *
+    from .implementations import *
 except ImportError:
     warnings.warn(f"cadlabutils.ml not available")

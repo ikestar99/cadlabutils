@@ -48,10 +48,6 @@ class CoreTrainer(ABC):
         Data typed of model and ground truth data.
     curr_path : Path
         Path where model parameters are stored.
-    fold : int
-        Current k-fold fold.
-    curve : int
-        Current index along learning curve generation.
     _cfg : dict
         Keyword arguments used to instantiate trainable parameters.
 
@@ -109,7 +105,7 @@ class CoreTrainer(ABC):
     _RAM, _GPU, _GPR = None, None, None
     _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
     COLS = [
-        "trainer", "model", "name", "fold", "curve", "n", "epoch", "mode",
+        "trainer", "model", "name", "fold", "curve", "n", "b", "epoch", "mode",
         "time", "loss", "acc"]
 
     def __init__(
@@ -139,18 +135,10 @@ class CoreTrainer(ABC):
         self.peak_path = self.my_dir.joinpath(f"{name}_peak.safetensors")
         self.stat_csv = out_dir.joinpath("coretrainer_stats.csv")
         self.batch_size = None
+        self.last = None
         self.pbar = pbar
         self.names = [self.__class__.__name__, model.__name__, name]
         self.coords = [0, 0]
-
-        # load data from prior model runs
-        self.stat, self.last = None
-        if self.stat_csv.is_file():
-            stat = pd.read_csv(self.stat_csv)
-            self.stat = stat.loc[
-                (stat[self.COLS[0]] == self.names[0]) &
-                (stat[self.COLS[1]] == self.names[1]) &
-                (stat[self.COLS[2]] == self.names[2])]
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
@@ -240,6 +228,25 @@ class CoreTrainer(ABC):
         Generate plot of statistics saved during training.
         """
         pass
+
+    def _pull_stats(
+            self
+    ):
+        """Pull training statistics related to current model.
+
+        Returns
+        -------
+        stats : pd.DataFrame | None
+            Stored statistics of prior epochs for current model and paradigm.
+            None if no such statistics are available.
+        """
+        stats = None
+        if self.stat_csv.is_file():
+            stats = pd.read_csv(self.stat_csv).query(" and ".join(
+                [f"{c} == '{n}'" for c, n in zip(self.COLS[:3], self.names)]))
+            stats = None if stats.empty else stats
+
+        return stats
 
     def _track_memory(
             self
@@ -401,7 +408,9 @@ class CoreTrainer(ABC):
 
         # save data
         mode = "train" if train else "valid"
-        data = [len(loader.dataset), epoch, mode, agg_time, agg_loss, agg_acc]
+        data = [
+            len(loader.dataset), self.batch_size, epoch, mode, agg_time,
+            agg_loss, agg_acc]
         self.last = self.last if train else data[-2:]
         stats = pd.DataFrame(
             [self.names + self.coords + data], columns=self.COLS, index=[0])
@@ -466,10 +475,10 @@ class CoreTrainer(ABC):
         """
         self.coords, epoch = [fold, curve], 0
         v_min_loss, v_max_acc = None, None
-        if self.stat is not None:
-            subset = self.stat.query(f"{self.COLS[7]} == 'valid'")
-            v_min_loss = subset[self.COLS[-2]].min()
-            v_max_acc = subset[self.COLS[-1]].max()
+        stats = self._pull_stats().query(f"{self.COLS[8]} == 'valid'")
+        if stats is not None:
+            v_min_loss = stats[self.COLS[-2]].min()
+            v_max_acc = stats[self.COLS[-1]].max()
 
         self._initialize()
         self._track_memory()
@@ -483,23 +492,21 @@ class CoreTrainer(ABC):
                 self.batch_size, len(train_dataset) // min_iter)
 
         # load model-specific checkpoint if available
-        if self.curr_path.is_file() and self.stat is not None:
-            subset = self.stat.loc[
-                (self.stat[self.COLS[3]] == self.coords[0]) &
-                (self.stat[self.COLS[4]] == self.coords[1])]
+        if self.curr_path.is_file() and stats is not None:
+            stats = stats.query(" and ".join(
+                [f"{c} == {v}" for c, v in zip(self.COLS[3:5], self.coords)]))
 
             # only load if there is a model with the same fold and curve index
-            if not subset.empty:
-                epoch = subset[self.COLS[6]].max() + 1
-                if epoch < epochs:  # ... with an incomplete training loop
-                    print(f"resuming fold {fold} curve {curve} epoch {epoch}")
-                    utils.load(
-                        self.curr_path, self.model, device=self.device,
-                        load_dict={
-                            self._O: self.optimizer, self._S: self.scheduler})
-                else:  # skip otherwise
-                    print(f"skipping fold {fold} curve {curve}")
+            if not stats.empty:
+                epoch = stats[self.COLS[7]].max() + 1
+                if epoch >= epochs:  # skip if epoch already completed
+                    print(f"skipping completed fold {fold} curve {curve}")
                     return
+
+                print(f"resuming fold {fold} curve {curve} epoch {epoch}")
+                utils.load(
+                    self.curr_path, self.model, device=self.device, load_dict={
+                        self._O: self.optimizer, self._S: self.scheduler})
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
@@ -522,8 +529,8 @@ class CoreTrainer(ABC):
             if save_best and utils.is_better(**check):
                 v_min_loss, v_max_acc = v_loss, v_acc
                 message = f"Saving fold {fold} curve {curve} epoch {e}"
-                message += f"\n    loss: {v_loss:.4e}"
-                message += f"\n    metric {v_acc:.4e}" if use_acc else ""
+                message += f"\n├── loss: {v_loss:.4e}"
+                message += f"\n└── metric {v_acc:.4e}" if use_acc else ""
                 print(message)
                 utils.save(self.peak_path, self.model)
 

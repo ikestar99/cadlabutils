@@ -7,6 +7,8 @@ Created on Wed Aug 06 09:00:00 2025
 
 
 # 2. Third-party library imports
+import numpy as np
+from sklearn.metrics import confusion_matrix
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -149,10 +151,11 @@ def simulate_batch_size(
             torch.cuda.empty_cache()
 
 
-def acc_confusion(
+def classifier_stats(
         output: torch.tensor,
         target: torch.tensor,
-        matrix: torch.tensor = None,
+        soft_mat: torch.tensor = None,
+        hard_mat: torch.tensor = None,
         logits: bool = True
 ):
     """Compute accuracy metrics for classification model.
@@ -164,10 +167,13 @@ def acc_confusion(
     target : torch.tensor
         Ground truth labels. Has shape (batch, ...) where trailing dimensions
         match those in `output`. Values should be ``int`` dtype.
-    matrix : torch.tensor, optional
-        Running confusion matrix of class-wise prediction probabilities. Has
-        shape (true classes, predicted classes).
+    soft_mat : torch.tensor, optional
+        Running soft confusion matrix of class-wise prediction probabilities.
+        Has shape (true classes, predicted classes).
         Defaults to None, in which case confusion matrix is omitted.
+    hard_mat : torch.tensor, optional
+        Running discrete confusion matrix of class-wise predictions. Same
+        shape as `probabilities`.
     logits : bool, optional
         If True, values in `output` are interpreted as raw logits. If False,
         values in `output` are interpreted as probabilities.
@@ -177,18 +183,28 @@ def acc_confusion(
     -------
     accuracy : float
         Prediction accuracy averaged across batches.
-    matrix : torch.tensor | None
-        Aggregate confusion matrix of class-wise prediction probabilities.
+    soft_mat : torch.tensor | None
+        `soft_mat` updated with values from current batch.
+    hard_mat : torch.tensor | None
+        `hard_mat` updated with values from current batch.
     """
-    # convert logits into probabilities and calculate accuracy
+    # flatten auxiliary dimensions
+    C = output.size(1)
+    output = output.permute(0, *range(2, output.ndim), 1).reshape(-1, C)
+    target = target.view(-1).long()
+
+    # update probability distribution confusion matrix
     output = F.softmax(output, dim=1) if logits else output
-    accuracy = (torch.argmax(output, dim=1) == target).float().mean().item()
+    if soft_mat is not None:
+        soft_mat.scatter_add_(0, target[:, None].expand(-1, C), output)
 
-    # update confusion matrix probability distributions per class
-    if matrix is not None:
-        target = target.reshape(-1)
-        output = torch.movedim(output, 1, -1).reshape(-1, output.size(1))
-        for c in range(matrix.size(0)):
-            matrix[c] += output[target == c].sum(dim=0)
+    # compute predicted labels and accuracy
+    output = torch.argmax(output, dim=1)
+    accuracy = (output == target).float().mean().item()
 
-    return accuracy, matrix
+    # update discrete confusion matrix
+    if hard_mat is not None:
+        index = target * hard_mat.size(0) + output
+        hard_mat += torch.bincount(index, minlength=C ** 2).reshape(C, C)
+
+    return accuracy, soft_mat, hard_mat

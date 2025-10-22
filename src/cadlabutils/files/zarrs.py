@@ -17,8 +17,9 @@ from numcodecs import Blosc
 
 def make_zarr(
         file: Path,
-        shape: tuple[int],
-        chunk: tuple[int],
+        shape: tuple[int, ...],
+        chunk: tuple[int, ...],
+        mode: str = "w",
         dtype: type = np.uint8,
         fill: float = 0.0,
         compressor: type = "blosc",
@@ -30,10 +31,13 @@ def make_zarr(
     ----------
     file : Path
         Path to save zarr file (.zarr).
-    shape : tuple[int]
+    shape : tuple[int, ...]
         Shape of array to store in zarr file.
-    chunk : tuple[int]
+    chunk : tuple[int, ...]
         Shape of data chunks stored in zarr file.
+    mode : {"r", "a", "w", "x"}, optional
+        File open mode.
+        Defaults to "w".
     dtype : type, optional
         Datatype of saved array.
         Defaults to np.uint8.
@@ -57,7 +61,7 @@ def make_zarr(
     compressor = compressor if compressor != "blosc" else Blosc(
         cname="zstd", clevel=5, shuffle=Blosc.BITSHUFFLE)
     zarr_file = zarr.open(
-        file.with_suffix(".zarr"), mode="w", shape=shape, chunks=chunk,
+        file.with_suffix(".zarr"), mode=mode, shape=shape, chunks=chunk,
         dtype=dtype, fill_value=fill, compressor=compressor, **kwargs)
     return zarr_file
 
@@ -94,6 +98,7 @@ def resize_zarr(
 
 def consolidate_zarr(
         z_arr: Path | zarr.Array,
+        mode: str = "r"
 ):
     """Work with consolidated zarr array metadata.
 
@@ -102,6 +107,10 @@ def consolidate_zarr(
     z_arr : Path | zarr.Array
         If ``Path``, open zarr file with consolidated metadata (.zarr).
         Otherwise, if ``zarr.Array``, consolidate file metadata.
+    mode : str, optional
+        Mode to open the zarr file. Passed to zarr.open_consolidated()
+        function iff `z_arr` is ``Path``.
+        Defaults to "r".
 
     Returns
     -------
@@ -109,7 +118,7 @@ def consolidate_zarr(
         `z_arr` after manipulation
     """
     if isinstance(z_arr, Path):
-        z_arr = zarr.open_consolidated(z_arr, mode="r")
+        z_arr = zarr.open_consolidated(z_arr, mode=mode)
     else:
         zarr.consolidate_metadata(z_arr.store)
 
