@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Fri Apr 9 03:38:05 2021
-
 @author: ike
 """
 
@@ -13,165 +12,52 @@ import io
 # 2. Third-party library imports
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import seaborn as sns
 from PIL import Image
 
 
-sns.set_theme(style="ticks")
+# set style and colors
+sns.set_theme(
+    style="ticks", palette="rocket",
+    rc={"axes.spines.right": False, "axes.spines.top": False})
 
 
-def formatTitle(conserved, label: str):
-    if conserved in label:
-        label = label.replace(conserved, "")
+def style_ax(
+        ax: plt.Axes,
+        x_label: str = None,
+        y_label: str = None,
+        x_lim: tuple[int, int] = None,
+        y_lim: tuple[int, int] = None,
+        x_bins: int = None,
+        y_bins: int = None,
+        tick_size: int = 20,
+        label_size: int = 20,
+        label_weight: str = "bold",
+        label_color: str = "black",
+        line_width: int = 3
+):
+    for spine in ax.spines.values():
+        spine.set(color=label_color, linewidth=line_width)
+    for axis, label, limits, bins in (
+            ("x", x_label, x_lim, x_bins), ("y", y_label, y_lim, y_bins)):
+        if label is not None:
+            getattr(ax, f"set_{axis}label")(
+                label, fontsize=label_size, fontweight=label_weight,
+                color=label_color)
+        if limits is not None:
+            getattr(ax, f"set_{axis}lim")(*limits)
+        if bins is not None:
+            getattr(ax, f"{axis}axis").set_major_locator(
+                MaxNLocator(nbins=bins))
 
-    label = label.strip()
-    return label
-
-
-def getColors(n, palatte="viridis"):
-    return sns.color_palette(palatte, n_colors=n)
-
-
-def getFigAndAxes(rows=1, cols=1, sharex=False, sharey=False, **kwargs):
-    plt.rcParams["font.size"] = "15"
-    fig, axes = plt.subplots(
-        nrows=rows, ncols=cols, squeeze=False, figsize=(6 * cols, 4 * rows),
-        dpi=150, sharex=sharex, sharey=sharey, **kwargs)
-    fig.subplots_adjust(top=0.9)
-    return fig, axes
-
-
-def clearAx(ax):
-    ax.axis("off")
-
-
-def redrawAxis(ax, xaxis=False, yaxis=False, yintercept=0, xintercept=0, lw=2):
-    sns.despine(ax=ax, top=True, right=True, left=True, bottom=True)
-    (ax.axhline(y=yintercept, xmin=0, xmax=1, lw=lw, color="k")
-     if xaxis else None)
-    (ax.axvline(x=xintercept, ymin=0, ymax=1, lw=lw, color="k")
-     if yaxis else None)
-
-
-def moveAxis(ax, yintercept=0, xintercept=0, lw=2):
-    sns.despine(ax=ax, top=True, right=True, left=False, bottom=False)
-    ax.spines["bottom"].set_position(('data', yintercept))
-    ax.spines["bottom"].set_linewidth(lw)
-    ax.spines["left"].set_position(('data', xintercept))
-    ax.spines["left"].set_linewidth(lw)
-
-
-def resetLimits(ax, xs=None, ys=None):
-    (ax.set_xlim(*[float(x) for x in xs]) if xs is not None else None)
-    (ax.set_ylim(*[float(y) for y in ys]) if ys is not None else None)
-
-
-def mirrorAxisLimits(ax, axis):
-    value = np.abs(ax.get_ylim() if axis == "0" else ax.get_xlim()).max()
-    (ax.set_ylim(bottom=-value, top=value) if axis == "0" else ax.set_xlim(
-        left=-value, right=value))
-
-
-def adjustNBins(ax, xbins=10, ybins=8):
-    ax.locator_params(axis="x", nbins=xbins)
-    ax.locator_params(axis="y", nbins=ybins)
-
-
-def addHorizontalAxTitle(ax, title):
-    ax.set_title(title)
-
-
-def addVerticalAxTitle(ax, title):
-    ax.text(
-        0, 0.5, title, verticalalignment='center', rotation=90,
-        transform=ax.transAxes)
-
-
-def addAxisLabels(ax, xlabel=None, ylabel=None):
-    (ax.set_xlabel(xlabel) if xlabel is not None else None)
-    (ax.set_ylabel(ylabel) if ylabel is not None else None)
-
-
-def specifyAxisTicks(ax, xticks=None, yticks=None):
-    (ax.xaxis.set_ticks(xticks) if xticks is not None else None)
-    (ax.yaxis.set_ticks(yticks) if yticks is not None else None)
-
-
-def removeAxisLabels(ax, xlabel=False, ylabel=False):
-    (ax.labels.xaxis.set_visible(False) if xlabel else None)
-    (ax.labels.yaxis.set_visible(False) if ylabel else None)
-
-
-def addLogAxis(ax, xlog=False, ylog=False):
-    (ax.set_xscale('log') if xlog else None)
-    (ax.set_yscale('log') if ylog else None)
-
-
-def addLegend(ax):
-    ax.legend(loc="center left", frameon=False, bbox_to_anchor=(1, 1))
-
-
-def shadeVerticalBox(ax, start, stop, alpha=0.05):
-    ax.axvspan(start, stop, color="gray", lw=0, alpha=alpha)
-
-
-def annotatePatches(ax):
-    for p in ax.patches:
-        num = '{:.1e}'.format(p.get_height())
-        num = (num[:3] if "e+00" in num else num)
-        ax.annotate(
-            num, (p.get_x() + (p.get_width() / 2), 0.9),
-            ha='center', va='center')
-
-
-def linePlot(
-        ax, data, yCol=None, xCol=None, hCol=None, hueDict=None, bootN=10,
-        color=None, lw=2, raw=False, order=None, **kwargs):
-    sns.lineplot(
-        x=xCol, y=yCol, hue=hCol, data=data, palette=hueDict, n_boot=bootN,
-        ax=ax, color=color, linewidth=lw,
-        hue_order=order, **kwargs)
-    print("here")
-    if raw:
-        sns.lineplot(
-            x=xCol, y=yCol, hue=hCol, data=data, palette=hueDict,
-            n_boot=bootN, ax=ax, color=color, linewidth=lw, estimator=None,
-            alpha=0.2, hue_order=order, **kwargs)
-
-
-def boxPlot(
-        ax, data, yCol, cCol=None, hCol=None, hueDict=None, color=None, lw=2,
-        raw=False, ori="v", order=None):
-    sns.boxplot(
-        x=cCol, y=yCol, hue=hCol, data=data, palette=hueDict, ax=ax,
-        color=color, orient=ori, linewidth=lw, hue_order=order)
-    if raw:
-        data = (data.sample(n=50, axis=0) if data.shape[0] > 200 else data)
-        sns.swarmplot(
-            x=cCol, y=yCol, hue=hCol, data=data, ax=ax, color="k", orient=ori,
-            size=3)
-
-
-def barPlot(
-        ax, data, yCol, cCol=None, hCol=None, hueDict=None, ci=95, bootN=1000,
-        color=None, lw=2, raw=False, ori="v", order=None):
-    sns.barplot(
-        x=cCol, y=yCol, hue=hCol, data=data, palette=hueDict, ci=ci,
-        n_boot=bootN, ax=ax, color=color, orient=ori, linewidth=lw,
-        capsize=.2, hue_order=order, errcolor="k", edgecolor=".2")
-    if raw:
-        data = (data.sample(n=50, axis=0) if data.shape[0] > 200 else data)
-        sns.swarmplot(
-            x=cCol, y=yCol, hue=hCol, data=data, ax=ax, color="k", orient=ori,
-            size=3)
-
-
-def heatmap(
-        ax, data, vmin, vmax, center, **kwargs):
-    sns.heatmap(
-        ax=ax, data=data, vmin=vmin, vmax=vmax, center=center, **kwargs)
+    # Bold tick labels (can control independently)
+    ax.tick_params(
+        axis="both", which="major", labelsize=tick_size, width=line_width,
+        colors=label_color)
+    return ax
 
 
 def generate_3d_plot(data, save, i_vars, hue):
@@ -194,13 +80,24 @@ def generate_3d_plot(data, save, i_vars, hue):
     plt.clf()
 
 
-def figToImage(title="", fig=None):
-    fig = (plt.gcf() if fig is None else fig)
-    plt.tight_layout()
-    fig.suptitle(title, y=.95, fontsize=10)
+def fig_to_im(
+        fig: plt.Figure
+):
+    """Convert matplotlib figure to a PIL Image.
+
+    Parameters
+    ----------
+    fig : plt.Figure
+        The matplotlib figure to convert.
+
+    Returns
+    -------
+    im : PIL Image
+        `fig` converted into a PIL Image.
+    """
     buffer = io.BytesIO()
     fig.savefig(buffer)
     buffer.seek(0)
-    figure = Image.open(buffer)
-    plt.close("all")
-    return figure
+    im = Image.open(buffer)
+    plt.close(fig)
+    return im

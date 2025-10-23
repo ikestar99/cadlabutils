@@ -106,7 +106,7 @@ class CoreTrainer(ABC):
     _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
     COLS = [
         "trainer", "model", "name", "fold", "curve", "n", "b", "epoch", "mode",
-        "time", "loss", "acc"]
+        "t_sample", "loss", "acc"]
 
     def __init__(
             self,
@@ -135,7 +135,6 @@ class CoreTrainer(ABC):
         self.peak_path = self.my_dir.joinpath(f"{name}_peak.safetensors")
         self.stat_csv = out_dir.joinpath("coretrainer_stats.csv")
         self.batch_size = None
-        self.last = None
         self.pbar = pbar
         self.names = [self.__class__.__name__, model.__name__, name]
         self.coords = [0, 0]
@@ -216,37 +215,11 @@ class CoreTrainer(ABC):
         """
         pass
 
-    @abstractmethod
-    def _make_plots(
+    def _plot(
             self
     ):
-        """Generate graphs at the end of training.
-
-        Notes
-        -----
-        Must be implemented by child classes.
-        Generate plot of statistics saved during training.
-        """
-        pass
-
-    def _pull_stats(
-            self
-    ):
-        """Pull training statistics related to current model.
-
-        Returns
-        -------
-        stats : pd.DataFrame | None
-            Stored statistics of prior epochs for current model and paradigm.
-            None if no such statistics are available.
-        """
-        stats = None
-        if self.stat_csv.is_file():
-            stats = pd.read_csv(self.stat_csv).query(" and ".join(
-                [f"{c} == '{n}'" for c, n in zip(self.COLS[:3], self.names)]))
-            stats = None if stats.empty else stats
-
-        return stats
+        """Generate graphs at the end of training."""
+        stats = self.pull_stats()
 
     def _track_memory(
             self
@@ -301,7 +274,7 @@ class CoreTrainer(ABC):
         """
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
-        self._make_plots()
+        self._plot()
         if self.curr_path.is_file():
             self.curr_path.unlink()
             self.curr_path.with_suffix(".pth").unlink()
@@ -411,11 +384,38 @@ class CoreTrainer(ABC):
         data = [
             len(loader.dataset), self.batch_size, epoch, mode, agg_time,
             agg_loss, agg_acc]
-        self.last = self.last if train else data[-2:]
         stats = pd.DataFrame(
             [self.names + self.coords + data], columns=self.COLS, index=[0])
         cdu_f.csvs.append_data(file=self.stat_csv, data=stats, index=False)
         return agg_loss, agg_acc
+
+    def pull_stats(
+            self,
+            cols: str | list[str] = None
+    ):
+        """Pull training statistics related to current model.
+
+        Parameters
+        ----------
+        cols : str | list[str], optional
+            Names of statistic columns to pull. Columns are those defined in
+            class attribute `COLS`.
+            Defaults to None, in which case all columns are returned.
+
+        Returns
+        -------
+        stats : pd.DataFrame | None
+            Stored statistics of prior epochs for current model and paradigm.
+            None if no such statistics are available.
+        """
+        stats = None
+        if self.stat_csv.is_file():
+            stats = pd.read_csv(self.stat_csv).query(" and ".join(
+                [f"{c} == '{n}'" for c, n in zip(self.COLS[:3], self.names)]))
+            stats = stats if cols is None else stats[cols]
+            stats = None if stats.empty else stats
+
+        return stats
 
     def train(
         self,
@@ -475,7 +475,7 @@ class CoreTrainer(ABC):
         """
         self.coords, epoch = [fold, curve], 0
         v_min_loss, v_max_acc = None, None
-        stats = self._pull_stats().query(f"{self.COLS[8]} == 'valid'")
+        stats = self.pull_stats().query(f"{self.COLS[8]} == 'valid'")
         if stats is not None:
             v_min_loss = stats[self.COLS[-2]].min()
             v_max_acc = stats[self.COLS[-1]].max()

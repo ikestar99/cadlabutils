@@ -119,8 +119,3 @@ class ClassificationTrainer(CoreTrainer):
         self.zarr[tuple(self.coords + [epoch, int(not train)])] = stats
         self.soft.zero_()
         self.hard.zero_()
-
-    def _make_plots(
-            self
-    ):
-        pass
