@@ -501,8 +501,9 @@ class CoreTrainer(ABC):
         """
         self.coords, epoch = [fold, curve], 0
         v_min_loss, v_max_acc = None, None
-        stats = self.pull_stats().query(f"{self.COLS[8]} == 'valid'")
+        stats = self.pull_stats()
         if stats is not None:
+            stats = stats.query(f"{self.COLS[8]} == 'valid'")
             v_min_loss = stats[self.COLS[-2]].min()
             v_max_acc = stats[self.COLS[-1]].max()
 

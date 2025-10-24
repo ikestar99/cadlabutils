@@ -37,7 +37,9 @@ def patched_render_locals(self, frame):
 
 
 Traceback._render_locals = patched_render_locals
-install(show_locals=True, width=120, suppress=["numpy", "pandas", "torch"])
+install(
+    show_locals=True, width=120,
+    suppress=["numpy", "optuna", "pandas", "torch"])
 
 
 def pbar(
