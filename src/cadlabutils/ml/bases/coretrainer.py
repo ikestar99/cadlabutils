@@ -128,7 +128,7 @@ class CoreTrainer(ABC):
     ):
         name = cdu.clean_name(Path(name)).stem
         out_dir = out_dir.joinpath("models")
-        self.my_dir = out_dir.joinpath(name)
+        self.my_dir = out_dir.joinpath(model.__name__, name)
 
         # set instance variables
         self.device = utils.get_device(gpu)
