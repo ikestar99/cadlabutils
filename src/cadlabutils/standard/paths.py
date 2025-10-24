@@ -46,7 +46,7 @@ def copy_path(
 
 def clean_name(
         path: Path,
-        fill: str = "_",
+        fill: str = "-",
         ext: bool = False
 ):
     """Replace unsafe file name characters with underscores.
@@ -57,7 +57,7 @@ def clean_name(
         Potential file name to clean up.
     fill : str, optional
         Character used to replace unsafe characters in `path`.
-        Defaults to "_".
+        Defaults to "-".
     ext : bool, optional
         If True, preserve original file extension.
         Defaults to False.
@@ -75,11 +75,11 @@ def clean_name(
     Clean file name without extension.
     >>> test_path = Path("/this/is/a/test/Th1$ i7 @n +u-n-s@fe n&me*..tif")
     >>> clean_name(test_path)
-    PosixPath('/this/is/a/test/Th1_ i7 _n _u-n-s_fe n_me_tif')
+    PosixPath('/this/is/a/test/Th1- i7 -n -u-n-s-fe n-me-tif')
 
     Clean file name with preserved extension.
     >>> clean_name(test_path, ext=True)
-    PosixPath('/this/is/a/test/Th1_ i7 _n _u-n-s_fe n_me_.tif')
+    PosixPath('/this/is/a/test/Th1- i7 -n -u-n-s-fe n-me-.tif')
     """
     cleaned = path.parent.joinpath(
         re.sub(r"[^0-9a-zA-Z-_ ]+", fill, path.stem if ext else path.name))
