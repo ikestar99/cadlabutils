@@ -15,8 +15,8 @@ from matplotlib.colors import ListedColormap
 from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
-import seaborn as sns
 from PIL import Image
+import seaborn as sns
 
 
 # set style and colors

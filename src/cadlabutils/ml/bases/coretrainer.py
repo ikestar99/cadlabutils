@@ -12,9 +12,11 @@ import time
 from pathlib import Path
 
 # 2. Third-party library imports
+import matplotlib.pyplot as plt
 import numpy as np
 import optuna
 import pandas as pd
+import seaborn as sns
 import torch
 import torch.nn as nn
 
@@ -105,8 +107,8 @@ class CoreTrainer(ABC):
     _RAM, _GPU, _GPR = None, None, None
     _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
     COLS = [
-        "trainer", "model", "name", "fold", "curve", "n", "b", "epoch", "mode",
-        "t_sample", "loss", "acc"]
+        "trainer", "model", "name", "fold", "curve", "n", "b_s", "epoch",
+        "mode", "t_sample", "loss", "acc"]
 
     def __init__(
             self,
@@ -219,7 +221,31 @@ class CoreTrainer(ABC):
             self
     ):
         """Generate graphs at the end of training."""
-        stats = self.pull_stats()
+        stats = self.pull_stats()[
+            ["fold", "curve", "epoch", "mode", "loss", "acc"]]
+        unique = sorted(stats["mode"].unique().tolist())
+
+        # plot loss and accuracy per curve over epochs, aggregate across folds
+        fig, axes = plt.subplots(
+            nrows=2, ncols=1, figsize=(6, 12), sharex=True, sharey=False)
+        for i, y in enumerate(["loss", "acc"]):
+            sns.lineplot(
+                data=stats, x="epoch", y=y, ax=axes[i], hue="mode", lw=3,
+                style="curve", errorbar=("se", 2), legend=i == 0,
+                hue_order=unique, palette=dict(zip(
+                    unique, sns.color_palette("rocket", len(unique)))))
+            cdu.style_ax(
+                axes[i], x_label="epoch", x_lim=(0, stats["epoch"].max()),
+                y_label=y, y_lim=None if i == 0 else (0, 1))
+            if i == 0:
+                axes[0].legend(
+                    frameon=False, prop={"size": 14, "weight": "bold"},
+                    loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=2)
+
+        plt.savefig(
+            self.my_dir.joinpath(f"training.png"), dpi=300,
+            bbox_inches="tight")
+        plt.close(fig)
 
     def _track_memory(
             self
