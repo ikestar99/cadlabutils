@@ -19,7 +19,7 @@ def make_zarr(
         file: Path,
         shape: tuple[int, ...],
         chunk: tuple[int, ...],
-        mode: str = "w",
+        mode: str = "a",
         dtype: type = np.uint8,
         fill: float = 0.0,
         compressor: type = "blosc",
@@ -37,7 +37,7 @@ def make_zarr(
         Shape of data chunks stored in zarr file.
     mode : {"r", "a", "w", "x"}, optional
         File open mode.
-        Defaults to "w".
+        Defaults to "a".
     dtype : type, optional
         Datatype of saved array.
         Defaults to np.uint8.
@@ -97,8 +97,7 @@ def resize_zarr(
 
 
 def consolidate_zarr(
-        z_arr: Path | zarr.Array,
-        mode: str = "r"
+        z_arr: Path | zarr.Array
 ):
     """Work with consolidated zarr array metadata.
 
@@ -107,10 +106,6 @@ def consolidate_zarr(
     z_arr : Path | zarr.Array
         If ``Path``, open zarr file with consolidated metadata (.zarr).
         Otherwise, if ``zarr.Array``, consolidate file metadata.
-    mode : str, optional
-        Mode to open the zarr file. Passed to zarr.open_consolidated()
-        function iff `z_arr` is ``Path``.
-        Defaults to "r".
 
     Returns
     -------
@@ -118,7 +113,7 @@ def consolidate_zarr(
         `z_arr` after manipulation
     """
     if isinstance(z_arr, Path):
-        z_arr = zarr.open_consolidated(z_arr, mode=mode)
+        z_arr = zarr.open_consolidated(z_arr, mode="r")
     else:
         zarr.consolidate_metadata(z_arr.store)
 
