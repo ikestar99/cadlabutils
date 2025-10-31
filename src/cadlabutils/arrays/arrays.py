@@ -357,7 +357,8 @@ def project_arr(
 
 def get_mean_std(
         arr: np.ndarray,
-        axis: int = 0
+        axis: int = 0,
+        step: int = 20
 ):
     """Apply two-pass algorithm to compute mean and std of large array.
 
@@ -368,6 +369,9 @@ def get_mean_std(
     axis : int, optional
         Axis along which to chunk `dset`.
         Defaults to 0.
+    step : int, optional
+        Step size when chunking `axis` in `arr`.
+        Defaults to 20.
 
     Returns
     -------
@@ -378,7 +382,6 @@ def get_mean_std(
     """
     idx = [slice(None) for _ in arr.shape]
     idx[axis] = 0
-    step = 50  # get_memory_repeat(arr[tuple(idx)])
 
     # First pass: mean
     total_sum, total_count = 0.0, 0
