@@ -550,3 +550,40 @@ def average_distance(
     """
     dist = pdist(arr, metric="euclidean").mean()
     return dist
+
+
+def corr_coef(
+        arr_1: np.ndarray,
+        arr_2: np.ndarray,
+        method: str = "p"
+):
+    """Compute correlations between two sets of vectors.
+
+    Parameters
+    ----------
+    arr_1 : np.ndarray
+        First set of vectors. Has shape (samples_a, observations).
+    arr_2 : np.ndarray
+        Second set of vectors. Has shape (samples_b, observations).
+    method : str, optional
+        If s, use Spearman correlation. Otherwise use Pearson correlation.
+        Defaults to p.
+
+    Returns
+    -------
+    corr_matrix : np.ndarray
+        Dense correlation matrix with shape (samples_a, samples_b). The value
+        at [i, j] is the `method` correlation between the i_th vector in
+        `arr_1` and j_th vector in `arr_2`.
+    """
+    if method == "s":
+        arr_1 = np.apply_along_axis(sst.rankdata, axis=1, arr=arr_1)
+        arr_2 = np.apply_along_axis(sst.rankdata, axis=1, arr=arr_2)
+
+    arr_1 = arr_1 - arr_1.mean(axis=1, keepdims=True)
+    arr_2 = arr_2 - arr_2.mean(axis=1, keepdims=True)
+
+    # Compute numerator: X^T @ Y (dot product of centered columns)
+    corr_matrix = arr_1 @ arr_2.T / np.outer(
+        np.linalg.norm(arr_1, axis=1), np.linalg.norm(arr_2, axis=1))
+    return corr_matrix
