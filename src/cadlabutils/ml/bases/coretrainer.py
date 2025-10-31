@@ -104,7 +104,7 @@ class CoreTrainer(ABC):
     {"patience": dummy_epochs} where `dummy_epochs` is an integer larger than
     the number of epochs planned during training.
     """
-    _RAM, _GPU, _GPR = None, None, None
+    _RAM, _GPU = None, None
     _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
     COLS = [
         "trainer", "model", "name", "fold", "curve", "n", "b_s", "epoch",
@@ -255,23 +255,18 @@ class CoreTrainer(ABC):
             return
 
         r_u, r_t = cdu.get_ram(scale=3)
-        self._RAM = (
-            self.pbar.add_task(
-                "RAM use (GiB)", tabs=1, total=r_t, show_time=False)
-            if self._RAM is None else self._RAM)
-        self.pbar.update(self._RAM, completed=r_u)
-        if self. device.type == "cpu":
-            return
-
-        g_u, g_r, g_t = utils.get_cuda_memory(self.device, scale=3)
-        if self._GPU is None:
-            self._GPU = self.pbar.add_task(
-                "GPU use (GiB)", tabs=2, total=g_t, show_time=False)
-            self._GPR = self.pbar.add_task(
-                "GPU res (GiB)", tabs=2, total=g_t, show_time=False)
+        if self._RAM is None:
+            self._RAM = self.pbar.add_task(
+                "RAM GiB", tabs=0, total=r_t, show_time=False)
 
         self.pbar.update(self._RAM, completed=r_u)
-        self.pbar.update(self._GPR, completed=g_r)
+        if self.device.type != "cpu":
+            g_u, g_r, g_t = utils.get_cuda_memory(self.device, scale=3)
+            if self._GPU is None:
+                self._GPU = self.pbar.add_task(
+                    "GPU (GiB)", tabs=0, total=g_t, show_time=False)
+
+            self.pbar.update(self._GPU, completed=g_r)
 
     def _initialize(
             self
@@ -304,8 +299,14 @@ class CoreTrainer(ABC):
         if self.curr_path.is_file():
             self.curr_path.unlink()
             self.curr_path.with_suffix(".pth").unlink()
-        if self.pbar is not None and task_id is not None:
-            self.pbar.stop_task(task_id)
+        if self.pbar is not None:
+            self.pbar.remove_task(self._RAM)
+            if self._GPU is not None:
+                self.pbar.remove_task(self._GPU)
+            if task_id is not None:
+                self.pbar.stop_task(task_id)
+
+        self._RAM, self._GPU = None, None
 
     def _step(
             self,
