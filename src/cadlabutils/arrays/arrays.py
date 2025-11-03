@@ -358,7 +358,8 @@ def project_arr(
 def get_mean_std(
         arr: np.ndarray,
         axis: int = 0,
-        step: int = 20
+        step: int = 20,
+        mean: float = None
 ):
     """Apply two-pass algorithm to compute mean and std of large array.
 
@@ -372,6 +373,9 @@ def get_mean_std(
     step : int, optional
         Step size when chunking `axis` in `arr`.
         Defaults to 20.
+    mean : float, optional
+        Mean value in `arr` if already known.
+        Defaults to None
 
     Returns
     -------
@@ -382,17 +386,18 @@ def get_mean_std(
     """
     idx = [slice(None) for _ in arr.shape]
     idx[axis] = 0
+    total_count = np.prod(arr.shape)
 
     # First pass: mean
-    total_sum, total_count = 0.0, 0
-    for i in range(0, arr.shape[axis], step):
-        indices = [slice(None) for _ in arr.shape]
-        indices[axis] = slice(i, min(i + step, arr.shape[axis]))
-        chunk = arr[tuple(indices)]
-        total_sum += np.sum(chunk)
-        total_count += chunk.size
+    if mean is None:
+        total_sum = 0.0
+        for i in range(0, arr.shape[axis], step):
+            indices = [slice(None) for _ in arr.shape]
+            indices[axis] = slice(i, min(i + step, arr.shape[axis]))
+            chunk = arr[tuple(indices)]
+            total_sum += np.sum(chunk)
 
-    mean = total_sum / total_count
+        mean = total_sum / total_count
 
     # Second pass: variance
     total_sq_diff = 0.0
