@@ -15,54 +15,6 @@ import numpy as np
 import tifffile as tf
 
 
-def save_tif(
-        file: Path,
-        arr: np.ndarray,
-        axes: str | list[str],
-        **kwargs
-):
-    """Save array as ImageJ-compatible tif image with zlib compression.
-
-    Parameters
-    ----------
-    file : Path
-        Path to save image (.tif).
-    arr : np.ndarray
-        Array to save as image.
-    axes : str | list[int, str]
-        Axis order of tif image. Can either be supplied as ``str`` (ex. Z stack
-        is "ZYX") or ``list`` (ex. ["Z", "Y", "X"]).
-
-    Other Parameters
-    ----------------
-    **kwargs : dict
-        Keyword arguments passed to tifffile.imwrite.
-    """
-    axes = "".join(axes) if isinstance(axes, list) else axes
-    tf.imwrite(
-        file.with_suffix(".tif"), arr, imagej=True,
-        metadata={"axes": axes.upper()}, compression="zlib", **kwargs)
-
-
-def list_tif(
-        folder: Path
-):
-    """Sort paths to individual .tif files in a directory.
-
-    Parameters
-    ----------
-    folder : Path
-        Path to folder containing image files (.tif).
-
-    Returns
-    -------
-    files : list[Path]
-        Sorted paths to individual .tif files in `folder`.
-    """
-    files = natsort.natsorted(list(folder.glob("*.tif*")))
-    return files
-
-
 def get_metadata(
         file: Path
 ):
