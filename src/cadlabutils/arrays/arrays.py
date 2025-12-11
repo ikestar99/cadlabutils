@@ -285,7 +285,8 @@ def masked_statistic(
 
 def project_arr(
         arr: np.ndarray,
-        func: Callable
+        func: Callable,
+        step: int = 20
 ):
     """Generate projections along all axes of an array.
 
@@ -296,6 +297,9 @@ def project_arr(
     func : Callable
         Numpy-compatible function with which to project along each axis. Must
         accept an "axis" keyword argument.
+    step : int, optional
+        Step size when chunking `arr`.
+        Defaults to 20.
 
     Returns
     -------
@@ -330,7 +334,6 @@ def project_arr(
         for i in range(len(arr.shape))]
 
     # chunk along first dimension
-    step = get_memory_repeat(arr[0])
     for idx in range(0, arr.shape[0], step):
         end = min(idx + step, arr.shape[0])
         sub = arr[idx:end]
@@ -346,7 +349,6 @@ def project_arr(
 
     # update first projection if slice-by-slice comparison invalid
     if not slice_by_slice:
-        step = get_memory_repeat(arr[1])
         proj[0] = np.concatenate([
             func(arr[:, ydx: min(ydx + step, arr.shape[1])], axis=0)
             for ydx in range(0, arr.shape[1], step)], axis=0)
