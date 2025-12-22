@@ -22,7 +22,7 @@ T_REG = {
 }
 
 
-def _register(
+def register(
         ref: np.ndarray,
         mov: np.ndarray,
         mode: str
@@ -53,7 +53,7 @@ def _register(
     Rigid body registration
     >>> t_ref = np.array([[1, 0, 0], [1, 1, 0], [0, 1, 0]])
     >>> t_mov = np.array([[0, 1, 0], [0, 1, 1], [0, 0, 1]])
-    >>> _register(t_ref, t_mov, mode="rigid")
+    >>> register(t_ref, t_mov, mode="rigid")
     array([[ 1., -0.,  0.],
            [ 0.,  1.,  0.],
            [ 0.,  0.,  1.]])
@@ -62,11 +62,11 @@ def _register(
     return matrix
 
 
-def _transform(
+def transform(
         mov: np.ndarray,
         matrix: np.ndarray,
         order: int,
-        cval: float
+        cval: float = 0.0
 ):
     """Transform an image using a known transformation matrix.
 
@@ -79,8 +79,9 @@ def _transform(
     order : int
         Interpolation paradigm for transformation. Valid values are integers on
         range [0 (nearest-neighbor), 5 (bi-quintic)].
-    cval : float
+    cval : float, optional
         Fill value for warped pixels with no equivalent in `mov`.
+        Defaults to 0.
 
     Returns
     -------
@@ -138,8 +139,8 @@ def align_image(
     --------
     """
     for _ in range(cycles):
-        matrix = _register(ref=ref, mov=mov, mode=mode)
-        mov = _transform(mov=mov, matrix=matrix, order=order, cval=cval)
+        matrix = register(ref=ref, mov=mov, mode=mode)
+        mov = transform(mov=mov, matrix=matrix, order=order, cval=cval)
 
     return mov, matrix
 
@@ -202,7 +203,7 @@ def align_stack(
 
     for i in range(mov_stack.shape[0]):
         if use_constant_matrix:
-            moved = _transform(mov_stack[i], matrix, order=order, cval=cval)
+            moved = transform(mov_stack[i], matrix, order=order, cval=cval)
         else:
             moved, _ = align_image(
                 ref if ref.ndim == 2 else ref[i], mov_stack[i], cycles=cycles,
