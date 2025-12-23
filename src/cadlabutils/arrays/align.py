@@ -16,7 +16,7 @@ import skimage.transform as skt
 T_REG = {
     "translation": StackReg(StackReg.TRANSLATION),
     "rigid": StackReg(StackReg.RIGID_BODY),
-    "rotation": StackReg(StackReg.SCALED_ROTATION),
+    "similarity": StackReg(StackReg.SCALED_ROTATION),
     "affine": StackReg(StackReg.AFFINE),
     "bilinear": StackReg(StackReg.BILINEAR)
 }
@@ -39,7 +39,7 @@ def register(
         Constraints of registration paradigm:
         - "translation" --> translation in X/Y directions.
         - "rigid" --> rigid transformations.
-        - "rotation" --> rotation and dilation.
+        - "similarity" --> rotation and dilation.
         - "affine" --> affine transformation.
         - "bilinear" --> bilinear transformation.
 
@@ -117,7 +117,7 @@ def align_image(
         Constraints of registration paradigm:
         - "translation" --> translation in X/Y directions.
         - "rigid" --> rigid transformations. Default option.
-        - "rotation" --> rotation and dilation.
+        - "similarity" --> rotation and dilation.
         - "affine" --> affine transformation.
         - "bilinear" --> bilinear transformation.
     order : int, optional
@@ -138,9 +138,11 @@ def align_image(
     Examples
     --------
     """
+    matrix = np.eye(3)
     for _ in range(cycles):
-        matrix = register(ref=ref, mov=mov, mode=mode)
-        mov = transform(mov=mov, matrix=matrix, order=order, cval=cval)
+        m = register(ref=ref, mov=mov, mode=mode)
+        mov = transform(mov=mov, matrix=m, order=order, cval=cval)
+        matrix = m @ matrix
 
     return mov, matrix
 
@@ -176,7 +178,7 @@ def align_stack(
         Constraints of registration paradigm:
         - "translation" --> translation in X/Y directions.
         - "rigid" --> rigid transformations. Default option.
-        - "rotation" --> rotation and dilation.
+        - "similarity" --> rotation and dilation.
         - "affine" --> affine transformation.
         - "bilinear" --> bilinear transformation.
     order : int, optional
