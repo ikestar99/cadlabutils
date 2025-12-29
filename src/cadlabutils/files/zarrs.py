@@ -94,27 +94,3 @@ def resize_zarr(
 
     z_arr.resize(new_shape)
     return old_shape
-
-
-def consolidate_zarr(
-        z_arr: Path | zarr.Array
-):
-    """Work with consolidated zarr array metadata.
-
-    Parameters
-    ----------
-    z_arr : Path | zarr.Array
-        If ``Path``, open zarr file with consolidated metadata (.zarr).
-        Otherwise, if ``zarr.Array``, consolidate file metadata.
-
-    Returns
-    -------
-    z_arr : zarr.Array
-        `z_arr` after manipulation
-    """
-    if isinstance(z_arr, Path):
-        z_arr = zarr.open_consolidated(z_arr, mode="r")
-    else:
-        zarr.consolidate_metadata(z_arr.store)
-
-    return z_arr

@@ -16,11 +16,49 @@ import scipy.stats as sst
 from scipy.spatial.distance import pdist
 import skimage.morphology as skm
 
-# 3. Local application / relative imports
-from cadlabutils import get_memory_repeat
+
+rng = np.random.default_rng(42)
 
 
-def label_array(
+def get_arr_repeat(
+        arr: np.ndarray,
+        target: float,
+        levels: int = 0
+):
+    """Compute number of arrays that fit in a fixed memory volume.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array to tile.
+    target : float
+        Size of memory container.
+    levels : int, optional
+        Unit of `target`. 0, B; 1, KiB; 2, MiB; 3, GiB, etc.
+        Defaults to 0.
+
+    Returns
+    -------
+    rep : int
+        Number of `arr` instances that fit into the memory volume defined by
+        `target` and `levels`.
+
+    Examples
+    --------
+    >>> t_rep = get_arr_repeat(
+    ...     np.ones((10, 10, 10), dtype=np.uint8), target=100, levels=1)
+    >>> t_rep
+    102
+    >>> t_rep = get_arr_repeat(
+    ...     np.ones((10, 10, 10), dtype=np.float64), target=100, levels=1)
+    >>> t_rep
+    12
+    """
+    rep = (target * (1024 ** levels)) // arr.nbytes
+    return rep
+
+
+def label_arr(
         arr: np.ndarray,
         connect: int = None
 ):
@@ -53,7 +91,7 @@ def label_array(
     ...     [0, 1, 0, 4, 0, 0, 0, 1, 0, 0],
     ...     [8, 7, 0, 0, 9, 0, 0, 2, 2, 0],
     ...     [0, 0, 0, 0, 9, 8, 8, 0, 0, 0]])
-    >>> t_label, t_n_labels, t_mode, t_count = label_array(t_arr)
+    >>> t_label, t_n_labels, t_mode, t_count = label_arr(t_arr)
     >>> t_label
     array([[0, 1, 0, 2, 0, 0, 0, 2, 0, 0],
            [1, 1, 0, 0, 2, 0, 0, 2, 2, 0],
@@ -66,7 +104,7 @@ def label_array(
     np.int64(8)
 
     Label an array with 4 objects connected by faces alone
-    >>> t_label, _, _, _ = label_array(t_arr, connect=1)
+    >>> t_label, _, _, _ = label_arr(t_arr, connect=1)
     >>> t_label
     array([[0, 1, 0, 2, 0, 0, 0, 3, 0, 0],
            [1, 1, 0, 0, 4, 0, 0, 3, 3, 0],
@@ -97,7 +135,7 @@ def remove_blobs(
         Minimum volume of foreground object in pixels.
     connect : int, optional
         Determine which array indices to connect as neighbors. Passed to
-        label_array function call.
+        label_arr function call.
 
     Returns
     -------
@@ -117,7 +155,7 @@ def remove_blobs(
            [0, 0, 0, 0, 9, 8, 8, 0, 0, 0]])
     """
     connect = arr.ndim if connect is None else min(connect, arr.ndim)
-    labeled, n_labels, _, _ = label_array(arr, connect)
+    labeled, n_labels, _, _ = label_arr(arr, connect)
     labeled = labeled if n_labels == 0 else skm.remove_small_objects(
         labeled, min_size, connect)
     return arr * (labeled != 0)

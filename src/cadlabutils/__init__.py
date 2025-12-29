@@ -13,3 +13,6 @@ from . import ml
 from . import files
 from . import arrays
 from . import classes
+
+
+null_object = classes.NullObject()

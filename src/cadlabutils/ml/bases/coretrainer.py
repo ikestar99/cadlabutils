@@ -124,7 +124,7 @@ class CoreTrainer(ABC):
             criterion_kwargs: dict = None,
             optimizer_kwargs: dict = None,
             scheduler_kwargs: dict = None,
-            pbar: cdu.TreeBar = None,
+            pbar: cdu.TreeBar = cdu.null_object,
     ):
         name = cdu.clean_name(Path(name)).stem
         out_dir = out_dir.joinpath("models")
@@ -137,7 +137,7 @@ class CoreTrainer(ABC):
         self.peak_path = self.my_dir.joinpath(f"{name}_peak.safetensors")
         self.stat_csv = out_dir.joinpath("coretrainer_stats.csv")
         self.batch_size = None
-        self.pbar = pbar
+        self.p_bar = pbar
         self.names = [self.__class__.__name__, model.__name__, name]
         self.coords = [0, 0]
 
@@ -251,22 +251,22 @@ class CoreTrainer(ABC):
             self
     ):
         """Track resource consumption on CPU and CUDA device if available."""
-        if self.pbar is None:
+        if not isinstance(self.p_bar, cdu.TreeBar):
             return
 
         r_u, r_t = cdu.get_ram(scale=3)
         if self._RAM is None:
-            self._RAM = self.pbar.add_task(
+            self._RAM = self.p_bar.add_task(
                 "RAM GiB", tabs=0, total=r_t, show_time=False)
 
-        self.pbar.update(self._RAM, completed=r_u)
+        self.p_bar.update(self._RAM, completed=r_u)
         if self.device.type != "cpu":
             g_u, g_r, g_t = utils.get_cuda_memory(self.device, scale=3)
             if self._GPU is None:
-                self._GPU = self.pbar.add_task(
+                self._GPU = self.p_bar.add_task(
                     "GPU (GiB)", tabs=0, total=g_t, show_time=False)
 
-            self.pbar.update(self._GPU, completed=g_r)
+            self.p_bar.update(self._GPU, completed=g_r)
 
     def _initialize(
             self
@@ -299,12 +299,11 @@ class CoreTrainer(ABC):
         if self.curr_path.is_file():
             self.curr_path.unlink()
             self.curr_path.with_suffix(".pth").unlink()
-        if self.pbar is not None:
-            self.pbar.remove_task(self._RAM)
-            if self._GPU is not None:
-                self.pbar.remove_task(self._GPU)
-            if task_id is not None:
-                self.pbar.stop_task(task_id)
+        self.p_bar.remove_task(self._RAM)
+        if self._GPU is not None:
+            self.p_bar.remove_task(self._GPU)
+        if task_id is not None:
+            self.p_bar.stop_task(task_id)
 
         self._RAM, self._GPU = None, None
 
@@ -563,10 +562,9 @@ class CoreTrainer(ABC):
                 utils.save(self.peak_path, self.model)
 
             # update progress bar
-            if self.pbar is not None:
-                label = f"{len(train_loader)} batches of {self.batch_size}"
-                self.pbar.start_task(task_id)
-                self.pbar.update(task_id, label=label, completed=e + 1)
+            label = f"{len(train_loader)} batches of {self.batch_size}"
+            self.p_bar.start_task(task_id)
+            self.p_bar.update(task_id, label=label, completed=e + 1)
 
             # optional optuna hyperparameter optimization
             if trial is not None:
@@ -625,17 +623,14 @@ class CoreTrainer(ABC):
             self.model, train=False, device=self.device, dtype=self.dtypes[0])
         eval_loader = utils.get_dataloader(
                 eval_dataset, batch_size=batch_size, shuffle=False)
-        if self.pbar is not None:
-            self.pbar.start_task(task_id)
-            self.pbar.update(task_id, total=len(eval_loader))
+        self.p_bar.start_task(task_id)
+        self.p_bar.update(task_id, total=len(eval_loader))
 
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
                 self.model, batch[in_idx], device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            if self.pbar is not None:
-                self.pbar.update(task_id, advance=1)
-
+            self.p_bar.update(task_id, advance=1)
             yield b * batch_size, output.detach().cpu().numpy()
 
         del eval_loader
