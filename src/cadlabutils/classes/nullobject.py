@@ -21,3 +21,6 @@ class NullObject:
 
     def __repr__(self):
         return "Null"
+
+
+null_object = NullObject()
