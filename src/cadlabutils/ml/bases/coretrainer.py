@@ -124,7 +124,7 @@ class CoreTrainer(ABC):
             criterion_kwargs: dict = None,
             optimizer_kwargs: dict = None,
             scheduler_kwargs: dict = None,
-            pbar: cdu.TreeBar = cdu.null_object,
+            pbar: cdu.TreeBar = cdu.classes.NullObject(),
     ):
         name = cdu.clean_name(Path(name)).stem
         out_dir = out_dir.joinpath("models")
