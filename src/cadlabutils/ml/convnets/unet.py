@@ -14,10 +14,10 @@ import torch.nn as nn
 from .. import make_block, make_dense
 
 
-class UNet3D(
+class _UNet(
     nn.Module
 ):
-    """3D U-Net architecture.
+    """Core U-Net architecture.
 
     Class Attributes
     ----------------
@@ -83,19 +83,27 @@ class UNet3D(
 
     def __init__(
             self,
+            d_i: int,
             c_i: int,
             c_o: int,
-            c_m: int = 32,
-            c_t: tuple[int, ...] = (64, 128, 256, 512),
-            act: type = nn.ReLU,
-            drop: float = None,
-            **kwargs
+            c_m: int,
+            c_t: tuple[int, ...],
+            act: type,
+            drop: float,
     ):
-        super(UNet3D, self).__init__()
+        super(_UNet, self).__init__()
         self.depth = len(c_t) - 1
         self.act = act
         self.drop = drop
         self.c_f = c_t[-1]
+
+        # prepare model dimensionality
+        self._norm = "3d" if d_i == 3 else "2d"
+        self._conv = nn.Conv3d if d_i == 3 else nn.Conv2d
+        self._pool = nn.MaxPool3d if d_i == 3 else nn.MaxPool2d
+        self._tpos = nn.ConvTranspose3d if d_i == 3 else nn.ConvTranspose2d
+        if d_i not in (2, 3):
+            raise ValueError(f"{self.__class__.__name__} supports 2/3D only.")
 
         # paired preparatory and post-processing convolution modules
         self._extend("encode_0", [c_i, c_m, c_t[0]])
@@ -109,7 +117,7 @@ class UNet3D(
         # create symmetric bottom module and final 1x1x1 convolution
         self._extend(
             "bottom", [c_t[-2], c_t[-2], self.c_f], encode=True, decode=True)
-        self.final = nn.Conv3d(c_t[0], c_o, kernel_size=1, stride=1)
+        self.final = self._conv(c_t[0], c_o, kernel_size=1, stride=1)
 
     def _extend(
             self,
@@ -143,14 +151,13 @@ class UNet3D(
         *   e_1 = tensor [B, c_l[-1], Z//2, Y//2, X//2]
         *   e_2 = tensor [B, c_l[-1], Z, Y, X]
         """
-        lay = [nn.MaxPool3d(**self.UP_DOWN)] if encode else []
+        lay = [self._pool(**self.UP_DOWN)] if encode else []
         lay += [
             make_block(
-                nn.Conv3d(c_l[i], c, kernel_size=3, stride=1, padding=1),
-                c, norm="3d", act=self.act, drop=self.drop)
+                self._conv(c_l[i], c, kernel_size=3, stride=1, padding=1),
+                c, norm=self._norm, act=self.act, drop=self.drop)
             for i, c in enumerate(c_l[1:])]
-        lay += [] if not decode else [
-            nn.ConvTranspose3d(c_l[-1], c_l[-1], **self.UP_DOWN)]
+        lay += [self._tpos(c_l[-1], c_l[-1], **self.UP_DOWN)] if decode else []
         setattr(
             self, name, nn.Sequential(*lay) if len(lay) > 1 else lay[0])
 
@@ -198,10 +205,10 @@ class UNet3D(
         return out[0]
 
 
-class UNet3DClassifier(
-    UNet3D
+class _UNetClassifier(
+    _UNet
 ):
-    """Extended 3D U-Net architecture for classification
+    """Extended U-Net architecture for classification
 
     Attributes
     ----------
@@ -253,23 +260,34 @@ class UNet3DClassifier(
     """
     def __init__(
             self,
+            d_i: int,
             c_i: int,
             c_o: int,
-            c_t: tuple[int, ...] = None,
-            d_l: tuple[int, ...] = (1000,),
-            act_c: type = None,
-            act_l: type = nn.ReLU,
-            drop_c: float = None,
-            drop_l: float = None,
+            c_m: int,
+            c_t: tuple[int, ...],
+            d_l: tuple[int, ...],
+            act_c: type,
+            act_l: type,
+            drop_c: float,
+            drop_l: float,
             **kwargs
     ):
-        to_super = {c_t: c_t, "act": act_c}
-        super(UNet3DClassifier, self).__init__(
-            c_i, c_i, drop=drop_c,
-            **{k: v for k, v in to_super.items() if v is not None})
+        super(_UNetClassifier, self).__init__(
+            d_i=d_i,
+            c_i=c_i,
+            c_o=c_i,
+            c_m=c_m,
+            c_t=c_t,
+            act=act_c,
+            drop=drop_c)
+        del self.final
+        for i in range(self.depth):
+            if hasattr(self, f"decode_{i}"):
+                delattr(self, f"decode_{i}")
 
         # create pooling and dense linear layers
-        self.pool = nn.AdaptiveAvgPool3d((1, 1, 1))
+        self.avg = nn.AdaptiveAvgPool3d(
+            (1, 1, 1)) if d_i == 3 else nn.AdaptiveAvgPool2d((1, 1))
         self.dense = nn.Sequential(
             make_dense([self.c_f, *d_l], norm=True, act=act_l, drop=drop_l),
             nn.Linear(d_l[-1], c_o))
@@ -284,12 +302,86 @@ class UNet3DClassifier(
         Parameters
         ----------
         x : torch.tensor
-            Input tensor.
 
         Returns
         -------
         torch.tensor
-            Output tensor.
         """
-        x = self.pool(super(UNet3DClassifier, self).forward(x, decode=False))
+        x = self.avg(super(_UNetClassifier, self).forward(x, decode=False))
         return self.dense(torch.flatten(x, start_dim=1))
+
+
+class UNet2D(
+    _UNet
+):
+    def __init__(
+            self,
+            c_i: int,
+            c_o: int,
+            c_m: int = 32,
+            c_t: tuple[int, ...] = (64, 128, 256, 512, 1024),
+            act: type = nn.ReLU,
+            drop: float = None,
+            **kwargs
+    ):
+        super(UNet2D, self).__init__(
+            d_i=2, c_i=c_i, c_o=c_o, c_m=c_m, c_t=c_t, act=act, drop=drop)
+
+
+class UNet3D(
+    _UNet
+):
+    def __init__(
+            self,
+            c_i: int,
+            c_o: int,
+            c_m: int = 32,
+            c_t: tuple[int, ...] = (64, 128, 256, 512),
+            act: type = nn.ReLU,
+            drop: float = None,
+            **kwargs
+    ):
+        super(UNet3D, self).__init__(
+            d_i=3, c_i=c_i, c_o=c_o, c_m=c_m, c_t=c_t, act=act, drop=drop)
+
+
+class UNet2DClassifier(
+    _UNetClassifier
+):
+    def __init__(
+            self,
+            c_i: int,
+            c_o: int,
+            c_m: int = 32,
+            c_t: tuple[int, ...] = (64, 128, 256, 512, 1024),
+            d_l: tuple[int, ...] = (1000,),
+            act_c: type = nn.ReLU,
+            act_l: type = nn.ReLU,
+            drop_c: float = None,
+            drop_l: float = None,
+            **kwargs
+    ):
+        super(UNet2DClassifier, self).__init__(
+            d_i=2, c_i=c_i, c_o=c_o, c_m=c_m, c_t=c_t, d_l=d_l, act_c=act_c,
+            act_l=act_l, drop_c=drop_c, drop_l=drop_l)
+
+
+class UNet3DClassifier(
+    _UNetClassifier
+):
+    def __init__(
+            self,
+            c_i: int,
+            c_o: int,
+            c_m: int = 32,
+            c_t: tuple[int, ...] = (64, 128, 256, 512),
+            d_l: tuple[int, ...] = (1000,),
+            act_c: type = nn.ReLU,
+            act_l: type = nn.ReLU,
+            drop_c: float = None,
+            drop_l: float = None,
+            **kwargs
+    ):
+        super(UNet3DClassifier, self).__init__(
+            d_i=3, c_i=c_i, c_o=c_o, c_m=c_m, c_t=c_t, d_l=d_l, act_c=act_c,
+            act_l=act_l, drop_c=drop_c, drop_l=drop_l)

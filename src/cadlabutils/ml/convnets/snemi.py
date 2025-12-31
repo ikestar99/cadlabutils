@@ -38,6 +38,9 @@ class ResidualModule(
         Number of output channels from final convolution block.
     full : bool
         If True, use 3D convolutions. If false, use 2D convolutions.
+    in2d : bool
+        Relevant if `full` is False. If True, input tensors are 2D. If False,
+        input tensors are 3D and treated as stacks of 2D tensors.
     act : type
         Nonlinear activation function to use.
     drop : float
@@ -71,16 +74,18 @@ class ResidualModule(
             c_i: int,
             c_o: int,
             full: bool,
+            in2d: bool,
             act: type,
             drop: float,
             prep: nn.Module = None,
             post: nn.Module = None
     ):
         super(ResidualModule, self).__init__()
-        self.full = full
+        self.full = full or in2d
         self.prep, self.post = prep, post
 
-        conv, k, p, n = (nn.Conv3d, (1, 3, 3), (0, 1, 1), "3d") if full else (
+        conv, k, p, n = (
+            nn.Conv3d, (1, 3, 3), (0, 1, 1), "3d") if full and not in2d else (
             nn.Conv2d, 3, 1, "2d")
         self.conv1 = make_block(
             conv(c_i, c_o, kernel_size=k, stride=1, padding=p),
@@ -115,20 +120,23 @@ class ResidualModule(
         # optional preparatory module
         x = self.prep(x) if self.prep is not None else x
 
-        # initial convolution
-        x = self.conv1(x) if self.full else torch.stack(
-            [self.conv1(x[:, :, z]) for z in range(x.shape[2])], dim=2)
+        # flatten z if needed
+        if not self.full:
+            b, c, z, h, w = x.shape
+            x = x.permute(0, 2, 1, 3, 4).reshape(b * z, c, h, w)
 
-        # final convolution block with residual connection
-        x = x + self.conv2(x) if self.full else torch.stack(
-            [self.conv2(x[:, :, z]) for z in range(x.shape[2])], dim=2)
+        # conv operations, unflatten z if needed
+        x = self.conv1(x)
+        x = x + self.conv2(x)
+        if not self.full:
+            x = x.reshape(b, z, x.size(1), h, w).permute(0, 2, 1, 3, 4)
 
         # optional post-processing module
         x = self.post(x) if self.post is not None else x
         return x
 
 
-class SNEMI3D(
+class _SNEMI(
     nn.Module
 ):
     """SNEMI3D-based U-Net architecture.
@@ -195,28 +203,45 @@ class SNEMI3D(
 
     def __init__(
             self,
+            d_i: int,
             c_i: int,
             c_o: int,
-            c_m: int = 18,
-            c_t: tuple[int, ...] = (28, 36, 48, 64, 80),
-            act: type = nn.ELU,
-            drop: float = None,
-            **kwargs
+            c_m: int,
+            c_t: tuple[int, ...],
+            act: type,
+            drop: float = None
     ):
-        super(SNEMI3D, self).__init__()
+        super(_SNEMI, self).__init__()
         self.depth = len(c_t)
         self.act = act
         self.drop = drop
         self.c_f = c_t[-1]
 
+        # prepare model dimensionality
+        self._norm = "3d" if d_i == 3 else "2d"
+        self._in2d = False if d_i == 3 else True
+        self._conv = nn.Conv3d if d_i == 3 else nn.Conv2d
+        self._pool = nn.MaxPool3d if d_i == 3 else nn.MaxPool2d
+        self._tpos = nn.ConvTranspose3d if d_i == 3 else nn.ConvTranspose2d
+        self._ctxt = {
+            k: v if isinstance(v, int) else v[-d_i:]
+            for k, v in self.CONTEXT.items()}
+        self._updn = {
+            k: v if isinstance(v, int) else v[-d_i:]
+            for k, v in self.UP_DOWN.items()}
+        if d_i not in (2, 3):
+            raise ValueError(f"{self.__class__.__name__} supports 2/3D only.")
+
         # paired anisotropic input/output modules
         self.encode_0 = ResidualModule(
-            c_m, c_t[0], full=False, act=act, drop=drop, prep=make_block(
-                nn.Conv3d(c_i, c_m, **self.CONTEXT), c_m, norm="3d",
+            c_m, c_t[0], full=False, in2d=self._in2d, act=act, drop=drop,
+            prep=make_block(
+                self._conv(c_i, c_m, **self._ctxt), c_m, norm=self._norm,
                 act=self.act, drop=self.drop))
         self.decode_0 = ResidualModule(
-            c_t[0], c_m, full=False, act=act, drop=drop, post=make_block(
-                nn.Conv3d(c_m, c_o, **self.CONTEXT), c_o, norm="3d",
+            c_t[0], c_m, full=False, in2d=self._in2d, act=act, drop=drop,
+            post=make_block(
+                self._conv(c_m, c_o, **self._ctxt), c_o, norm=self._norm,
                 act=self.act, drop=self.drop))
 
         # create paired encoder and decoder modules
@@ -256,11 +281,11 @@ class SNEMI3D(
         *   e_1 = tensor [B, c_o, Z, Y//2, X//2]
         """
         kwargs = {
-            "encode": {"prep": nn.MaxPool3d(**self.UP_DOWN)},
-            "decode": {
-                "post": nn.ConvTranspose3d(c_o, c_o, **self.UP_DOWN)}}[arm]
+            "encode": {"prep": self._pool(**self._updn)},
+            "decode": {"post": self._tpos(c_o, c_o, **self._updn)}}[arm]
         setattr(self, f"{arm}_{depth}", ResidualModule(
-            c_i, c_o, full=True, act=self.act, drop=self.drop, **kwargs))
+            c_i, c_o, full=True, in2d=self._in2d, act=self.act, drop=self.drop,
+            **kwargs))
 
     def forward(
             self,
@@ -300,10 +325,10 @@ class SNEMI3D(
         return out[0]
 
 
-class SNEMI3DClassifier(
-    SNEMI3D
+class _SNEMIClassifier(
+    _SNEMI
 ):
-    """Extended SNEMI3D architecture for classification.
+    """Extended SNEMI architecture for classification.
 
     Attributes
     ----------
@@ -356,24 +381,34 @@ class SNEMI3DClassifier(
     """
     def __init__(
             self,
+            d_i: int,
             c_i: int,
             v_i: int,
             c_o: int,
+            c_m: int,
             c_t: tuple[int, ...] = None,
             d_l: tuple[int, ...] = (1000,),
             act_c: type = None,
             act_l: type = nn.ReLU,
             drop_c: float = None,
             drop_l: float = None,
-            **kwargs
     ):
-        to_super = {c_t: c_t, "act": act_c}
-        super(SNEMI3DClassifier, self).__init__(
-            c_i, c_i, drop=drop_c,
-            **{k: v for k, v in to_super.items() if v is not None})
+        super(_SNEMIClassifier, self).__init__(
+            d_i=d_i,
+            c_i=c_i,
+            c_o=c_i,
+            c_m=c_m,
+            c_t=c_t,
+            act=act_c,
+            drop=drop_c)
+        for i in range(self.depth):
+            if hasattr(self, f"decode_{i}"):
+                delattr(self, f"decode_{i}")
 
         # add global pooling and dense linear modules
-        self.pool = nn.AdaptiveAvgPool3d((None, 1, 1))
+        v_i = v_i if d_i == 3 else 1
+        self.avg = nn.AdaptiveAvgPool3d(
+            (v_i, 1, 1)) if d_i == 3 else nn.AdaptiveAvgPool2d((1, 1))
         self.dense = nn.Sequential(
             make_dense([self.c_f*v_i, *d_l], norm=True, act=act_l, drop=drop_l),
             nn.Linear(d_l[-1], c_o))
@@ -388,12 +423,87 @@ class SNEMI3DClassifier(
         Parameters
         ----------
         x : torch.tensor
-            Input tensor.
 
         Returns
         -------
         torch.tensor
-            Output tensor.
         """
-        x = self.pool(super(SNEMI3DClassifier, self).forward(x, decode=False))
+        x = self.avg(super(_SNEMIClassifier, self).forward(x, decode=False))
         return self.dense(torch.flatten(x, start_dim=1))
+
+
+class SNEMI2D(
+    _SNEMI
+):
+    def __init__(
+            self,
+            c_i: int,
+            c_o: int,
+            c_m: int = 18,
+            c_t: tuple[int, ...] = (28, 36, 48, 64, 80),
+            act: type = nn.ELU,
+            drop: float = None,
+            **kwargs
+    ):
+        super(SNEMI2D, self).__init__(
+            d_i=2, c_i=c_i, c_o=c_o, c_m=c_m, c_t=c_t, act=act, drop=drop)
+
+
+class SNEMI3D(
+    _SNEMI
+):
+    def __init__(
+            self,
+            c_i: int,
+            c_o: int,
+            c_m: int = 18,
+            c_t: tuple[int, ...] = (28, 36, 48, 64, 80),
+            act: type = nn.ELU,
+            drop: float = None,
+            **kwargs
+    ):
+        super(SNEMI3D, self).__init__(
+            d_i=3, c_i=c_i, c_o=c_o, c_m=c_m, c_t=c_t, act=act, drop=drop)
+
+
+class SNEMI2DClassifier(
+    _SNEMIClassifier
+):
+    def __init__(
+            self,
+            c_i: int,
+            c_o: int,
+            c_m: int = 18,
+            c_t: tuple[int, ...] = (28, 36, 48, 64, 80),
+            d_l: tuple[int, ...] = (320,),
+            act_c: type = nn.ELU,
+            act_l: type = nn.ReLU,
+            drop_c: float = None,
+            drop_l: float = None,
+            **kwargs
+    ):
+        super(SNEMI2DClassifier, self).__init__(
+            d_i=2, c_i=c_i, v_i=1, c_o=c_o, c_m=c_m, c_t=c_t, d_l=d_l,
+            act_c=act_c, act_l=act_l, drop_c=drop_c, drop_l=drop_l)
+
+
+class SNEMI3DClassifier(
+    _SNEMIClassifier
+):
+    def __init__(
+            self,
+            c_i: int,
+            v_i: int,
+            c_o: int,
+            c_m: int = 18,
+            c_t: tuple[int, ...] = (28, 36, 48, 64, 80),
+            d_l: tuple[int, ...] = (1000,),
+            act_c: type = nn.ELU,
+            act_l: type = nn.ReLU,
+            drop_c: float = None,
+            drop_l: float = None,
+            **kwargs
+    ):
+        super(SNEMI3DClassifier, self).__init__(
+            d_i=3, c_i=c_i, v_i=v_i, c_o=c_o, c_m=c_m, c_t=c_t, d_l=d_l,
+            act_c=act_c, act_l=act_l, drop_c=drop_c, drop_l=drop_l)
