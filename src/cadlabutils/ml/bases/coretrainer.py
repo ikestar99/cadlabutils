@@ -235,8 +235,8 @@ class CoreTrainer(ABC):
                 hue_order=unique, palette=dict(zip(
                     unique, sns.color_palette("rocket", len(unique)))))
             cdu.style_ax(
-                axes[i], x_label="epoch", x_lim=(0, stats["epoch"].max()),
-                y_label=y, y_lim=None if i == 0 else (0, 1))
+                axes[i], x_label="epoch", y_label=y,
+                y_ticks=None if i == 0 else (0, 0.5, 1))
             if i == 0:
                 axes[0].legend(
                     frameon=False, prop={"size": 14, "weight": "bold"},

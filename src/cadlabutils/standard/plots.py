@@ -29,10 +29,8 @@ def style_ax(
         ax: plt.Axes,
         x_label: str = None,
         y_label: str = None,
-        x_lim: tuple[int, int] = None,
-        y_lim: tuple[int, int] = None,
-        x_bins: int = None,
-        y_bins: int = None,
+        x_ticks: tuple[float, ...] = None,
+        y_ticks: tuple[float, ...] = None,
         tick_size: int = 20,
         label_size: int = 20,
         label_weight: str = "bold",
@@ -41,17 +39,14 @@ def style_ax(
 ):
     for spine in ax.spines.values():
         spine.set(color=label_color, linewidth=line_width)
-    for axis, label, limits, bins in (
-            ("x", x_label, x_lim, x_bins), ("y", y_label, y_lim, y_bins)):
+    for axis, label, ticks in (
+            ("x", x_label, x_ticks), ("y", y_label, y_ticks)):
         if label is not None:
             getattr(ax, f"set_{axis}label")(
                 label, fontsize=label_size, fontweight=label_weight,
                 color=label_color)
-        if limits is not None:
-            getattr(ax, f"set_{axis}lim")(*limits)
-        if bins is not None:
-            getattr(ax, f"{axis}axis").set_major_locator(
-                MaxNLocator(nbins=bins))
+        if ticks is not None:
+            getattr(ax, f"set_{axis}ticks")(ticks)
 
     # Bold tick labels (can control independently)
     ax.tick_params(
