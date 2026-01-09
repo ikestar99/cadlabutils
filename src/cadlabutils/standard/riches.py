@@ -21,25 +21,25 @@ from rich.tree import Tree
 # 3. Local application / relative imports
 from .console import elapsed_time
 
-
-def patched_render_locals(self, frame):
-    """Custom local renderer that truncates large locals."""
-    table = Table.grid(padding=(0, 1))
-    for name, value in frame.locals.items():
-        try:
-            value = repr(value)
-            value = value if len(value) <= 124 else value[:120] + " ..."
-        except Exception:
-            value = "<unprintable>"
-
-        table.add_row(Text(name, style="bold cyan"), Text(value, style="dim"))
-    return table
-
-
-Traceback._render_locals = patched_render_locals
-install(
-    show_locals=True, width=120,
-    suppress=["numpy", "optuna", "pandas", "torch"])
+#
+# def patched_render_locals(self, frame):
+#     """Custom local renderer that truncates large locals."""
+#     table = Table.grid(padding=(0, 1))
+#     for name, value in frame.locals.items():
+#         try:
+#             value = repr(value)
+#             value = value if len(value) <= 124 else value[:120] + " ..."
+#         except Exception:
+#             value = "<unprintable>"
+#
+#         table.add_row(Text(name, style="bold cyan"), Text(value, style="dim"))
+#     return table
+#
+#
+# Traceback._render_locals = patched_render_locals
+# install(
+#     show_locals=True, width=120,
+#     suppress=["numpy", "optuna", "pandas", "torch"])
 
 
 def pbar(

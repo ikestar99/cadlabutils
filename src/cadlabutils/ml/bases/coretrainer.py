@@ -48,7 +48,7 @@ class CoreTrainer(ABC):
         Hardware device used for inference.
     dtypes : tuple[torch.dtype, torch.dtype]
         Data typed of model and ground truth data.
-    curr_path : Path
+    ckpt_path : Path
         Path where model parameters are stored.
     _cfg : dict
         Keyword arguments used to instantiate trainable parameters.
@@ -133,8 +133,8 @@ class CoreTrainer(ABC):
         # set instance variables
         self.device = utils.get_device(gpu)
         self.dtypes = dtypes
-        self.curr_path = self.my_dir.joinpath(f"{name}_ckpt.safetensors")
-        self.peak_path = self.my_dir.joinpath(f"{name}_peak.safetensors")
+        self.ckpt_path = self.my_dir.joinpath("ckpt")
+        self.peak_path = self.my_dir.joinpath("peak")
         self.stat_csv = out_dir.joinpath("coretrainer_stats.csv")
         self.batch_size = None
         self.p_bar = pbar
@@ -257,7 +257,7 @@ class CoreTrainer(ABC):
         r_u, r_t = cdu.get_ram(scale=3)
         if self._RAM is None:
             self._RAM = self.p_bar.add_task(
-                "RAM GiB", tabs=0, total=r_t, show_time=False)
+                    "RAM GiB", tabs=0, total=r_t, show_time=False)
 
         self.p_bar.update(self._RAM, completed=r_u)
         if self.device.type != "cpu":
@@ -296,9 +296,9 @@ class CoreTrainer(ABC):
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
         self._plot()
-        if self.curr_path.is_file():
-            self.curr_path.unlink()
-            self.curr_path.with_suffix(".pth").unlink()
+        for f in self.ckpt_path.parent.glob(f"{self.ckpt_path.name}*"):
+            f.unlink()
+
         self.p_bar.remove_task(self._RAM)
         if self._GPU is not None:
             self.p_bar.remove_task(self._GPU)
@@ -500,16 +500,25 @@ class CoreTrainer(ABC):
         used as input data while the second index serves as the target.
         """
         self.coords, epoch = [fold, curve], 0
-        v_min_loss, v_max_acc = None, None
+        globe_loss, globe_acc = None, None
+        local_loss, local_acc = None, None
         stats = self.pull_stats()
         if stats is not None:
             stats = stats.query(f"{self.COLS[8]} == 'valid'")
-            v_min_loss = stats[self.COLS[-2]].min()
-            v_max_acc = stats[self.COLS[-1]].max()
+            globe_loss = stats[self.COLS[-2]].min()
+            globe_acc = stats[self.COLS[-1]].max()
+            stats = stats.query(f"{self.COLS[3]} == fold")
+            if not stats.empty:
+                local_loss = stats[self.COLS[-2]].min()
+                local_acc = stats[self.COLS[-1]].max()
+
+            stats = stats.query(f"{self.COLS[4]} == curve")
 
         self._initialize()
         self._track_memory()
-        if self.batch_size is None:  # simulate optimum batch size
+
+        # simulate optimum batch size
+        if self.batch_size is None:
             pair = train_dataset[0]
             self.batch_size = metrics.simulate_batch_size(
                 self.model, sample=pair[0], device=self.device, target=pair[1],
@@ -519,25 +528,24 @@ class CoreTrainer(ABC):
                 self.batch_size, len(train_dataset) // min_iter)
 
         # load model-specific checkpoint if available
-        if self.curr_path.is_file() and stats is not None:
-            stats = stats.query(" and ".join(
-                [f"{c} == {v}" for c, v in zip(self.COLS[3:5], self.coords)]))
+        ckpt = list(self.ckpt_path.parent.glob(f"{self.ckpt_path.name}*"))
+        if len(ckpt) > 0 and stats is not None and not stats.empty:
+            epoch = stats[self.COLS[7]].max() + 1
+            if epoch >= epochs:
+                return
 
-            # only load if there is a model with the same fold and curve index
-            if not stats.empty:
-                epoch = stats[self.COLS[7]].max() + 1
-                if epoch >= epochs:  # skip if epoch already completed
-                    print(f"skipping completed fold {fold} curve {curve}")
-                    return
-
-                print(f"resuming fold {fold} curve {curve} epoch {epoch}")
-                utils.load(
-                    self.curr_path, self.model, device=self.device, load_dict={
-                        self._O: self.optimizer, self._S: self.scheduler})
+            print(f"resuming fold {fold} curve {curve} epoch {epoch}")
+            utils.load(
+                self.ckpt_path, self.model, device=self.device, load_dict={
+                    self._O: self.optimizer, self._S: self.scheduler})
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
+
+        label = f"{len(train_loader)} x {self.batch_size}"
+        self.p_bar.start_task(task_id)
+        self.p_bar.update(task_id, label=label, completed=epoch)
 
         # loop over full dataset per epoch
         for e in range(epoch, epochs):
@@ -546,25 +554,23 @@ class CoreTrainer(ABC):
 
             # modify learning rate based on validation loss, save checkpoint
             self.scheduler.step(v_loss)
-            utils.save(self.curr_path, self.model, save_dict={
+            utils.save(self.ckpt_path, self.model, save_dict={
                 self._O: self.optimizer, self._S: self.scheduler})
 
             # save model if peak validation performance
-            check = {"curr_loss": v_loss, "best_loss": v_min_loss}
-            check.update(
-                {"curr_acc": v_acc, "best_acc": v_max_acc} if use_acc else {})
-            if save_best and utils.is_better(**check):
-                v_min_loss, v_max_acc = v_loss, v_acc
-                message = f"Saving fold {fold} curve {curve} epoch {e}"
-                message += f"\n├── loss: {v_loss:.4e}"
-                message += f"\n└── metric {v_acc:.4e}" if use_acc else ""
-                print(message)
+            local_check = False if e == 0 else utils.is_better(
+                (v_loss, local_loss), (v_acc, local_acc) if use_acc else None)
+            globe_check = False if e == 0 else utils.is_better(
+                (v_loss, globe_loss), (v_acc, globe_acc) if use_acc else None)
+            if local_check:
+                local_loss, local_acc = v_loss, v_acc
+                utils.save(self.my_dir.joinpath(f"fold {fold}"), self.model)
+            if save_best and globe_check:
+                globe_loss, globe_acc = v_loss, v_acc
                 utils.save(self.peak_path, self.model)
+                print(f"{self.coords + [e]}: l{v_loss:.4e} a{v_acc:.4e}")
 
-            # update progress bar
-            label = f"{len(train_loader)} batches of {self.batch_size}"
-            self.p_bar.start_task(task_id)
-            self.p_bar.update(task_id, label=label, completed=e + 1)
+            self.p_bar.update(task_id, completed=e + 1)
 
             # optional optuna hyperparameter optimization
             if trial is not None:
@@ -622,7 +628,7 @@ class CoreTrainer(ABC):
         utils.set_mode(
             self.model, train=False, device=self.device, dtype=self.dtypes[0])
         eval_loader = utils.get_dataloader(
-                eval_dataset, batch_size=batch_size, shuffle=False)
+            eval_dataset, batch_size=batch_size, shuffle=False)
         self.p_bar.start_task(task_id)
         self.p_bar.update(task_id, total=len(eval_loader))
 

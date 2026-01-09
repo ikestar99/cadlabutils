@@ -46,6 +46,7 @@ def style_ax(
                 label, fontsize=label_size, fontweight=label_weight,
                 color=label_color)
         if ticks is not None:
+            getattr(ax, f"set_{axis}lim")(ticks[0], ticks[-1])
             getattr(ax, f"set_{axis}ticks")(ticks)
 
     # Bold tick labels (can control independently)

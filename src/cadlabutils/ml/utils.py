@@ -22,38 +22,35 @@ _PTH = ".pth"
 
 
 def is_better(
-        curr_loss: float = None,
-        best_loss: float = None,
-        curr_acc: float = None,
-        best_acc: float = None
+        loss: tuple[float, float] = None,
+        acc: tuple[float, float] = None,
+        loss_tol: float = 0.01,
+        acc_tol: float = 0.005,
+        eps: float = 1e-8
 ):
     """Determine if current performance is better than prior best performance.
 
     Parameters
     ----------
-    curr_loss : float, optional
-        Loss metric after current epoch.
-        Defaults to None.
-    best_loss : float, optional
-        Best loss metric from all prior epochs.
-        Defaults to None.
-    curr_acc : float, optional
-        Accuracy metric after current epoch.
+    loss : tuple[float, float], optional
+        Loss metrics from current and best epochs.
+        Defaults to None, in which case loss is not considered.
+    acc : float, optional
+        Accuracy metrics from current and best epochs
         Defaults to None, in which case accuracy is not considered.
-    best_acc : float, optional
-        Best accuracy metric from all prior epochs.
-        Defaults to None.
+    loss_tol
+    acc_tol
 
     Returns
     -------
     better : bool
         If True, current metrics are better than prior best performance based
-        on decreasing loss and/or increasing accuracy.
+        on decreasing loss first, with increasing accuracy as a tie breaker.
 
     Raises
     ------
     ValueError
-        Must provide `curr_loss`, `curr_acc`, or both.
+        Must provide `loss` or `acc`.
 
     Notes
     -----
@@ -63,34 +60,36 @@ def is_better(
     Examples
     --------
     Performance is better for current model.
-    >>> is_better(curr_loss=0.5, best_loss=0.7)
+    >>> is_better(loss=(0.5, 0.7))
     True
-    >>> is_better(curr_acc=0.6, best_acc=0.3)
+    >>> is_better(acc=(0.6, 0.3))
     True
-    >>> is_better(curr_loss=0.5, curr_acc=0.6)
-    True
-    >>> is_better(curr_loss=0.5, best_loss=0.7, curr_acc=0.6, best_acc=0.3)
+    >>> is_better(loss=(0.5, 0.504), acc=(0.62, 0.6))
     True
 
     Performance is better for prior models.
-    >>> is_better(curr_loss=0.5, best_loss=0.3)
+    >>> is_better(loss=(0.5, 0.3))
     False
-    >>> is_better(curr_acc=0.6, best_acc=0.9)
+    >>> is_better(acc=(0.6, 0.9))
     False
-    >>> is_better(curr_loss=0.5, best_loss=0.7, curr_acc=0.6, best_acc=0.9)
-    False
-    >>> is_better(curr_loss=0.5, best_loss=0.3, curr_acc=0.6, best_acc=0.3)
+    >>> is_better(loss=(0.5, 0.504), acc=(0.6, 0.6))
     False
     """
-    better = True
-    if curr_loss is not None:
-        better &= (True if best_loss is None else curr_loss < best_loss)
-    if curr_acc is not None:
-        better &= (True if best_acc is None else curr_acc > best_acc)
-    if curr_loss is None and curr_acc is None:
-        raise ValueError("Must provide `curr_loss` or `curr_acc`")
+    if loss is None and acc is None:
+        raise ValueError("Must provide `loss` or `acc`")
 
-    return better
+    if loss is not None:
+        ratio = (loss[0] + eps) / (loss[1] + eps)
+        if ratio <= 1 - loss_tol:
+            return True
+        elif ratio >= 1 + loss_tol:
+            return False
+
+    if acc is not None:
+        if acc[0] - acc[1] >= acc_tol:
+            return True
+
+    return False
 
 
 def get_device(
