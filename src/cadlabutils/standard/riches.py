@@ -274,3 +274,10 @@ class TreeBar(rp.Progress):
         self._ids.pop(idx)
         self._tabs.pop(idx)
         self._update_tree()
+
+    def stop_tasks(
+            self,
+            *args
+    ):
+        for arg in args:
+            self.stop_task(arg)
