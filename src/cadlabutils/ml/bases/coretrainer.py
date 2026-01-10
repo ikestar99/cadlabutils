@@ -503,18 +503,18 @@ class CoreTrainer(ABC):
         used as input data while the second index serves as the target.
         """
         self.coords, epoch = [fold, curve], 0
-        globe_loss, globe_acc = None, None
-        local_loss, local_acc = None, None
+        globe_loss, globe_acc = float("inf"), float("-inf")
+        local_loss, local_acc = float("inf"), float("-inf")
         stats = self.pull_stats()
         if stats is not None:
             self.batch_size = int(stats.iloc[0, 6])
             stats = stats.query(f"{self.COLS[8]} == 'valid'")
-            globe_loss = stats[self.COLS[-2]].min()
-            globe_acc = stats[self.COLS[-1]].max()
+            globe_loss, globe_acc = (
+                stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
             stats = stats.query(f"{self.COLS[3]} == fold")
             if not stats.empty:
-                local_loss = stats[self.COLS[-2]].min()
-                local_acc = stats[self.COLS[-1]].max()
+                local_loss, local_acc = (
+                    stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
 
             stats = stats.query(f"{self.COLS[4]} == curve")
 
@@ -562,9 +562,9 @@ class CoreTrainer(ABC):
                 self._O: self.optimizer, self._S: self.scheduler})
 
             # save model if peak validation performance
-            local_check = False if e == 0 else utils.is_better(
+            local_check = utils.is_better(
                 (v_loss, local_loss), (v_acc, local_acc) if use_acc else None)
-            globe_check = False if e == 0 else utils.is_better(
+            globe_check = utils.is_better(
                 (v_loss, globe_loss), (v_acc, globe_acc) if use_acc else None)
             if save_best and local_check:
                 local_loss, local_acc = v_loss, v_acc
