@@ -177,7 +177,7 @@ def classifier_stats(
     logits : bool, optional
         If True, values in `output` are interpreted as raw logits. If False,
         values in `output` are interpreted as probabilities.
-        Defaults toTrue.
+        Defaults to True.
 
     Returns
     -------

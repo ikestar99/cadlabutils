@@ -219,14 +219,13 @@ def get_dataloader(
     Notes
     -----
     If `dataset` is not divisible into equal batches of `batch_size` samples,
-    The final non-`batch_size` batch will be discarded if it includes a single
-    sample and `batch_size` > 1.
+    The final undersized batch will be discarded iff `drop_last` is True and
+    `dataset` has at least one full batch.
     """
-    remainder = len(dataset) % batch_size
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=shuffle, num_workers=workers,
         pin_memory=True, persistent_workers=True,
-        drop_last=all((remainder > 0, batch_size != 1, drop_last)), **kwargs)
+        drop_last=(len(dataset) // batch_size) > 0 and drop_last, **kwargs)
     return loader
 
 

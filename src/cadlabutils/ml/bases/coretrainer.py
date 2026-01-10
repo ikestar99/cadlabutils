@@ -19,6 +19,7 @@ import pandas as pd
 import seaborn as sns
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # 3. Local application / relative imports
 import cadlabutils as cdu
@@ -129,6 +130,7 @@ class CoreTrainer(ABC):
         name = cdu.clean_name(Path(name)).stem
         out_dir = out_dir.joinpath("models")
         self.my_dir = out_dir.joinpath(model.__name__, name)
+        self.test_dir = self.my_dir.joinpath("test")
 
         # set instance variables
         self.device = utils.get_device(gpu)
@@ -158,6 +160,7 @@ class CoreTrainer(ABC):
         # save configuration for reuse
         else:
             self.my_dir.mkdir(exist_ok=True, parents=True)
+            self.test_dir.mkdir(exist_ok=True, parents=True)
             cdu_f.yamls.to_yaml(
                 config_yaml, {
                     k: [f"{c.__module__}.{c.__qualname__}", d]
@@ -504,6 +507,7 @@ class CoreTrainer(ABC):
         local_loss, local_acc = None, None
         stats = self.pull_stats()
         if stats is not None:
+            self.batch_size = int(stats.iloc[0, 6])
             stats = stats.query(f"{self.COLS[8]} == 'valid'")
             globe_loss = stats[self.COLS[-2]].min()
             globe_acc = stats[self.COLS[-1]].max()
@@ -562,13 +566,13 @@ class CoreTrainer(ABC):
                 (v_loss, local_loss), (v_acc, local_acc) if use_acc else None)
             globe_check = False if e == 0 else utils.is_better(
                 (v_loss, globe_loss), (v_acc, globe_acc) if use_acc else None)
-            if local_check:
+            if save_best and local_check:
                 local_loss, local_acc = v_loss, v_acc
                 utils.save(self.my_dir.joinpath(f"fold {fold}"), self.model)
-            if save_best and globe_check:
-                globe_loss, globe_acc = v_loss, v_acc
-                utils.save(self.peak_path, self.model)
-                print(f"{self.coords + [e]}: l{v_loss:.4e} a{v_acc:.4e}")
+                if globe_check:
+                    globe_loss, globe_acc = v_loss, v_acc
+                    utils.save(self.peak_path, self.model)
+                    print(f"{self.coords + [e]}: l{v_loss:.4e} a{v_acc:.4e}")
 
             self.p_bar.update(task_id, completed=e + 1)
 
@@ -587,9 +591,9 @@ class CoreTrainer(ABC):
     def evaluate(
             self,
             eval_dataset: torch.utils.data.Dataset,
-            batch_size: int = 10,
             task_id: cdu.rp.TaskID = None,
-            in_idx: int | str = slice(None)
+            in_idx: int | str = slice(None),
+            logits: bool = True
     ):
         """Inference on unlabeled data with trained model.
 
@@ -597,8 +601,6 @@ class CoreTrainer(ABC):
         ----------
         eval_dataset : torch.utils.data.Dataset
             Unlabeled dataset used for inference.
-        batch_size : int
-            Batch size used for inference.
 
         Yields
         ------
@@ -616,6 +618,9 @@ class CoreTrainer(ABC):
             Index of each sample in `eval_dataset` to use for inference.
             Defaults to `slice(None)`, in which case the entirety of each
             sample is used as model input.
+        logits : bool, optional
+            If True, values in `output` are interpreted as raw logits.
+            Defaults to True.
 
         Notes
         -----
@@ -623,6 +628,7 @@ class CoreTrainer(ABC):
         that returns an iterable with at least two indices. The first index is
         used as input data while the second index serves as the target.
         """
+        batch_size = int(self.pull_stats().iloc[0, 6])
         self._initialize()
         utils.load(self.peak_path, self.model, device=self.device)
         utils.set_mode(
@@ -631,12 +637,12 @@ class CoreTrainer(ABC):
             eval_dataset, batch_size=batch_size, shuffle=False)
         self.p_bar.start_task(task_id)
         self.p_bar.update(task_id, total=len(eval_loader))
-
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
                 self.model, batch[in_idx], device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            self.p_bar.update(task_id, advance=1)
+            self.p_bar.update(task_id, completed=b + 1)
+            output = F.softmax(output, dim=1) if logits else output
             yield b * batch_size, output.detach().cpu().numpy()
 
         del eval_loader
