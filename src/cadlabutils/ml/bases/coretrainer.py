@@ -641,7 +641,7 @@ class CoreTrainer(ABC):
             output, _, _ = utils.forward_pass(
                 self.model, batch[in_idx], device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            self.p_bar.update(task_id, completed=b + 1)
+            self.p_bar.update(task_id, completed=1)
             output = F.softmax(output, dim=1) if logits else output
             yield b * batch_size, output.detach().cpu().numpy()
 
