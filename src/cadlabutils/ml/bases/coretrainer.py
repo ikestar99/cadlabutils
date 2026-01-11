@@ -441,7 +441,7 @@ class CoreTrainer(ABC):
         stats = None
         if self.stat_csv.is_file():
             stats = pd.read_csv(self.stat_csv).query(" and ".join([
-                f"'{c}' == '{n}'" for c, n in zip(self.COLS[:3], self.names)]))
+                f"{c} == '{n}'" for c, n in zip(self.COLS[:3], self.names)]))
             stats = stats if cols is None else stats[cols]
             stats = None if stats.empty else stats
 
@@ -509,15 +509,17 @@ class CoreTrainer(ABC):
         stats = self.pull_stats()
         if stats is not None:
             self.batch_size = int(stats.iloc[0, 6])
-            stats = stats.query(f"'{self.COLS[8]}' == 'valid'")
+            stats = stats.query(f"{self.COLS[8]} == 'valid'")
             globe_loss, globe_acc = (
                 stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
-            stats = stats.query(f"'{self.COLS[3]}' == @fold")
+            print(f"global: l{global_loss:.2e} a{global_acc:.2%}")
+            stats = stats.query(f"{self.COLS[3]} == @fold")
             if not stats.empty:
                 local_loss, local_acc = (
                     stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
+                print(f"local: l{local_loss:.2e} a{local_acc:.2%}")
 
-            stats = stats.query(f"'{self.COLS[4]}' == @curve")
+            stats = stats.query(f"{self.COLS[4]} == @curve")
 
         self._initialize()
         self._track_memory()
