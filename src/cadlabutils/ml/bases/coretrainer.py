@@ -639,14 +639,13 @@ class CoreTrainer(ABC):
             self.model, train=False, device=self.device, dtype=self.dtypes[0])
         eval_loader = utils.get_dataloader(
             eval_dataset, batch_size=batch_size, shuffle=False)
-        self.p_bar.start_task(task_id)
-        self.p_bar.update(task_id, total=len(eval_loader))
+        self.p_bar.update(task_id, total=len(eval_loader), start=True)
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
                 self.model, batch[in_idx], device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            self.p_bar.update(task_id, completed=1)
             output = F.softmax(output, dim=1) if logits else output
+            self.p_bar.update(task_id, advance=output.size(0))
             yield b * batch_size, output.detach().cpu().numpy()
 
         del eval_loader
