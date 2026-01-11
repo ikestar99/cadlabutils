@@ -302,7 +302,8 @@ class CoreTrainer(ABC):
         for f in self.ckpt_path.parent.glob(f"{self.ckpt_path.name}*"):
             f.unlink()
 
-        self.p_bar.remove_task(self._RAM)
+        if self._RAM is not None:
+            self.p_bar.remove_task(self._RAM)
         if self._GPU is not None:
             self.p_bar.remove_task(self._GPU)
         if task_id is not None:
