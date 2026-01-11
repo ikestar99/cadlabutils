@@ -512,12 +512,12 @@ class CoreTrainer(ABC):
             stats = stats.query(f"{self.COLS[8]} == 'valid'")
             globe_loss, globe_acc = (
                 stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
-            stats = stats.query(f"{self.COLS[3]} == fold")
+            stats = stats.query(f"{self.COLS[3]} == @fold")
             if not stats.empty:
                 local_loss, local_acc = (
                     stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
 
-            stats = stats.query(f"{self.COLS[4]} == curve")
+            stats = stats.query(f"{self.COLS[4]} == @curve")
 
         self._initialize()
         self._track_memory()
@@ -594,7 +594,8 @@ class CoreTrainer(ABC):
             eval_dataset: torch.utils.data.Dataset,
             task_id: cdu.rp.TaskID = None,
             in_idx: int | str = slice(None),
-            logits: bool = True
+            logits: bool = True,
+            fold: int = None
     ):
         """Inference on unlabeled data with trained model.
 
@@ -629,9 +630,11 @@ class CoreTrainer(ABC):
         that returns an iterable with at least two indices. The first index is
         used as input data while the second index serves as the target.
         """
+        model_path = self.peak_path if fold is None else self.my_dir.joinpath(
+            f"fold {fold}")
         batch_size = int(self.pull_stats().iloc[0, 6])
         self._initialize()
-        utils.load(self.peak_path, self.model, device=self.device)
+        utils.load(model_path, self.model, device=self.device)
         utils.set_mode(
             self.model, train=False, device=self.device, dtype=self.dtypes[0])
         eval_loader = utils.get_dataloader(
