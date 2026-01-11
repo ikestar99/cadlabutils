@@ -572,7 +572,7 @@ class CoreTrainer(ABC):
                 if globe_check:
                     globe_loss, globe_acc = v_loss, v_acc
                     utils.save(self.peak_path, self.model)
-                    print(f"{self.coords + [e]}: l{v_loss:.4e} a{v_acc:.4e}")
+                    print(f"{self.coords + [e]}: l{v_loss:.2e} a{v_acc:.2%}")
 
             self.p_bar.update(task_id, completed=e + 1)
 
