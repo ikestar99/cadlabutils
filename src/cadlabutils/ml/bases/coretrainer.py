@@ -634,6 +634,7 @@ class CoreTrainer(ABC):
             f"fold {fold}")
         batch_size = int(self.pull_stats().iloc[0, 6])
         self._initialize()
+        self._track_memory()
         utils.load(model_path, self.model, device=self.device)
         utils.set_mode(
             self.model, train=False, device=self.device, dtype=self.dtypes[0])
