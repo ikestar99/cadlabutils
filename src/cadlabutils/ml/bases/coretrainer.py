@@ -512,7 +512,7 @@ class CoreTrainer(ABC):
             stats = stats.query(f"{self.COLS[8]} == 'valid'")
             globe_loss, globe_acc = (
                 stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
-            print(f"global: l{global_loss:.2e} a{global_acc:.2%}")
+            print(f"global: l{globe_loss:.2e} a{globe_acc:.2%}")
             stats = stats.query(f"{self.COLS[3]} == @fold")
             if not stats.empty:
                 local_loss, local_acc = (
