@@ -536,7 +536,7 @@ class CoreTrainer(ABC):
                 self.batch_size, len(train_dataset) // min_iter)
 
         # load model-specific checkpoint if available
-        ckpt = list(self.ckpt_path.parent.glob(f"{self.ckpt_path.name}*"))
+        ckpt = self.ckpt_path.with_suffix(".safetensors")
         if len(ckpt) > 0 and stats is not None and not stats.empty:
             epoch = stats[self.COLS[7]].max() + 1
             print(epoch, epochs)
