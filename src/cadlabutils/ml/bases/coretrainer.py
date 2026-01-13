@@ -521,7 +521,14 @@ class CoreTrainer(ABC):
                 print(self.batch_size)
 
             stats = stats.query(f"{self.COLS[4]} == @curve")
+            if not stats.empty:
+                epoch = stats[self.COLS[7]].max() + 1
+                if epoch >= epochs:
+                    print("fixed it")
+                    import sys; sys.exit()
+                    return
 
+        import sys; sys.exit()
         self._initialize()
         self._track_memory()
 
@@ -536,19 +543,13 @@ class CoreTrainer(ABC):
                 self.batch_size, len(train_dataset) // min_iter)
 
         # load model-specific checkpoint if available
-        ckpt = self.ckpt_path.with_suffix(".safetensors")
-        if ckpt.is_file() and stats is not None and not stats.empty:
-            epoch = stats[self.COLS[7]].max() + 1
-            print(epoch, epochs)
-            import sys; sys.exit()
-            if epoch >= epochs:
-                return
-
+        ckpt = list(self.ckpt_path.parent.glob(f"{self.ckpt_path.name}*"))
+        if len(ckpt) > 0 and epoch > 0:
             print(f"resuming fold {fold} curve {curve} epoch {epoch}")
             utils.load(
                 self.ckpt_path, self.model, device=self.device, load_dict={
                     self._O: self.optimizer, self._S: self.scheduler})
-        import sys; sys.exit()
+
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
