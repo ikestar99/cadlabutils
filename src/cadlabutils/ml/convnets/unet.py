@@ -88,6 +88,7 @@ class _UNet(nn.Module):
             c_t: tuple[int, ...] = None,
             act: type = nn.ReLU,
             drop: float = None,
+            **kwargs
     ):
         super(_UNet, self).__init__()
         if c_t is None:
