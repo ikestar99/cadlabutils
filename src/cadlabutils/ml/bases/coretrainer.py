@@ -518,6 +518,7 @@ class CoreTrainer(ABC):
                 local_loss, local_acc = (
                     stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
                 print(f"local: l{local_loss:.2e} a{local_acc:.2%}")
+                print(self.batch_size)
 
             stats = stats.query(f"{self.COLS[4]} == @curve")
 
@@ -538,6 +539,8 @@ class CoreTrainer(ABC):
         ckpt = list(self.ckpt_path.parent.glob(f"{self.ckpt_path.name}*"))
         if len(ckpt) > 0 and stats is not None and not stats.empty:
             epoch = stats[self.COLS[7]].max() + 1
+            print(epoch, epochs)
+            import sys; sys.exit()
             if epoch >= epochs:
                 return
 
