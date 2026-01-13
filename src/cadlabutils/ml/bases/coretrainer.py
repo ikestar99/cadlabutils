@@ -537,7 +537,7 @@ class CoreTrainer(ABC):
 
         # load model-specific checkpoint if available
         ckpt = self.ckpt_path.with_suffix(".safetensors")
-        if len(ckpt) > 0 and stats is not None and not stats.empty:
+        if ckpt.is_file() and stats is not None and not stats.empty:
             epoch = stats[self.COLS[7]].max() + 1
             print(epoch, epochs)
             import sys; sys.exit()
@@ -548,7 +548,7 @@ class CoreTrainer(ABC):
             utils.load(
                 self.ckpt_path, self.model, device=self.device, load_dict={
                     self._O: self.optimizer, self._S: self.scheduler})
-
+        import sys; sys.exit()
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
