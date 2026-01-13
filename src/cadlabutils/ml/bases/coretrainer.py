@@ -518,17 +518,13 @@ class CoreTrainer(ABC):
                 local_loss, local_acc = (
                     stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
                 print(f"local: l{local_loss:.2e} a{local_acc:.2%}")
-                print(self.batch_size)
 
             stats = stats.query(f"{self.COLS[4]} == @curve")
             if not stats.empty:
                 epoch = stats[self.COLS[7]].max() + 1
                 if epoch >= epochs:
-                    print("fixed it")
-                    import sys; sys.exit()
                     return
 
-        import sys; sys.exit()
         self._initialize()
         self._track_memory()
 
@@ -543,20 +539,17 @@ class CoreTrainer(ABC):
                 self.batch_size, len(train_dataset) // min_iter)
 
         # load model-specific checkpoint if available
-        ckpt = list(self.ckpt_path.parent.glob(f"{self.ckpt_path.name}*"))
-        if len(ckpt) > 0 and epoch > 0:
-            print(f"resuming fold {fold} curve {curve} epoch {epoch}")
+        if epoch > 0:
             utils.load(
                 self.ckpt_path, self.model, device=self.device, load_dict={
                     self._O: self.optimizer, self._S: self.scheduler})
+            print(f"resumed fold {fold} curve {curve} epoch {epoch}")
 
         # prepare datasets
         train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
-
         label = f"{len(train_loader)} x {self.batch_size}"
-        self.p_bar.start_task(task_id)
-        self.p_bar.update(task_id, label=label, completed=epoch)
+        self.p_bar.update(task_id, label=label, completed=epoch, start=True)
 
         # loop over full dataset per epoch
         for e in range(epoch, epochs):
