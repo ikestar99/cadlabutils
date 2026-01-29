@@ -435,7 +435,7 @@ class CoreDataset(Dataset):
             metadata = self.meta.index.get_level_values(meta_var).to_numpy()
         else:
             meta_var = sorted(
-                meta_var, key=lambda n: self.meta.index.names.index(n))
+                meta_var, key=lambda n: self.meta.index.names._index(n))
             metadata = self.meta.index.to_frame(index=False)[meta_var].astype(
                 str).agg("-".join, axis=1).to_numpy()
 
@@ -452,9 +452,9 @@ class CoreDataset(Dataset):
         **kwargs
             key : int | str
                 Name of metadata variable to add. Must not already exist.
-            value (str | float | list | tuple | np.ndarray):
-                Values of metadata variable across samples. Iterable must have a
-                index per sample. Scalar will assign the same value to all
+            value : str | float | list | tuple | np.ndarray
+                Values of metadata variable across samples. Iterable must have
+                an index per sample. Scalar will assign the same value to all
                 samples.
 
         Raises

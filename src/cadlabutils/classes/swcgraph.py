@@ -20,48 +20,54 @@ import cadlabutils.files as cdu_f
 
 
 class SWCGraph:
-    """
-    Class to represent neuronal morphologies stored in swc format.
+    """Class to represent neuronal morphologies stored in swc format.
 
-    NOTE: column values can be accessed directly using the column name as an
-    attribute.
+    Class Attributes
+    ----------------
+    RESOLUTION : dict
+        Default resolution info for all neuronal morphologies.
+    C_N : str
+        Name of column containing node numerical identifier.
+    C_T : str
+        Name of column containing node class numerical identifier.
+    C_XYZ : list
+        Names of columns containing node coordinates.
+    C_ZYX : list
+        Reversed names of columns containing node coordinates.
+    C_R : str
+        Name of column containing node radius.
+    C_U : str
+        Name of column containing parent node numerical identifier.
+    C_ALL : list
+        All column names in standard order. No
 
-    Class Attributes:
-        RESOLUTION (dict):
-            Default resolution info for all neuronal morphologies.
-        C_N (str):
-            Name of column containing node numerical identifier.
-        C_T (str):
-            Name of column containing node class numerical identifier.
-        C_XYZ (list):
-            Names of columns containing node coordinates.
-        C_ZYX (list):
-            Reversed names of columns containing node coordinates.
-        C_R (str):
-            Name of column containing node radius.
-        C_U (str):
-            Name of column containing parent node numerical identifier.
-        C_ALL (list):
-            All column names in standard order. No
+    Attributes
+    ----------
+    data : pd.DataFrame
+        Neuronal morphology. Has 7 columns specified by class attributes.
+    resolution : dict
+        Resolution of each spatial dimension in microns/pixel. Keys correspond
+        to coordinate columns in C_XYZ attribute.
+    coords : np.ndarray
+        Coordinates of all nodes. Of shape (nodes, z y x).
+    center : np.ndarray
+        (z, y, x) of soma if present, otherwise center of mass of all nodes.
+    components : np.ndarray
+        Label of connected component to which each node belongs. Of shape
+        (nodes,).
+    offset : np.ndarray
+        Minimum coordinates of furthest node in each axis, with padding.
 
-    Attributes:
-        data (pd.DataFrame):
-            Neuronal morphology. Has 7 columns specified by class attributes.
-        resolution (dict):
-            Resolution of each spatial dimension in microns/pixel. Keys
-            correspond to coordinate columns in C_XYZ attribute.
-        coords (np.ndarray):
-            Coordinates of all nodes. Of shape (nodes, z y x).
-        center (np.ndarray):
-            Coordinates of soma if present, otherwise center of mass of all
-            nodes. (z, y, x).
-        components (np.ndarray):
-            Label of connected component to which each node belongs. Of shape
-            (nodes,).
-        offset (np.ndarray).
-            Minimum coordinates of furthest node in each axis, with padding.
-            Used to convert node coordinates to image coordinates following
-            Skeleton.get_bounds function call.
+    Parameters
+    ----------
+    data : pd.DataFrame):
+        Formatted morphology data. Each row corresponds to a node and contains
+        ordered columns [node id, type, x, y, z, radius, parent node id].
+    resolution (dict, optional):
+        Pixel resolution, in microns, of each spatial dimension. Used to
+        convert coordinates in microns to coordinates in pixels. Key is the
+        dimension ("z", "y", "x") and value is resolution.
+        Defaults to None, in which case coordinates are not scaled.
     """
     RESOLUTION = {"x": 1, "y": 1, "z": 1}
     C_N = "node"
@@ -78,20 +84,6 @@ class SWCGraph:
             data: pd.DataFrame,
             resolution: dict[str: float] = None
     ):
-        """
-        Instantiate from a formatted dataframe.
-
-        Args:
-            data (pd.DataFrame):
-                Formatted morphology data. Each row corresponds to a node and
-                contains 7 columns ordered as:
-                node id, type, x/y/z coordinates, radius, and parent node id.
-            resolution (dict, optional):
-                Pixel resolution, in microns, of each spatial dimension. Used
-                to convert coordinates in microns to coordinates in pixels. Key
-                is the dimension ("z", "y", "x") and value is resolution.
-                Defaults to None, in which case coordinates are not scaled.
-        """
         # standardize column names
         self.data = data
         self.data.columns = self.C_ALL
@@ -104,12 +96,12 @@ class SWCGraph:
     def __len__(
             self
     ):
-        """
-        Get number of nodes in morphology.
+        """Get number of nodes in morphology.
 
-        Returns:
-            (int):
-                Number of nodes in morphology.
+        Returns
+        -------
+        int
+            Number of nodes in morphology.
         """
         return self.data.shape[0]
 
@@ -117,26 +109,22 @@ class SWCGraph:
             self,
             item: dict[str: list[float] | tuple[float]]
     ):
-        """
-        Filter column values and return result as new instance.
+        """Filter column values and return result as new instance.
 
-        Args:
-            item (dict[str: list[float] | tuple[float]]):
-                Instructions with which to filter. Has the following structure:
-                -   key (str):
-                        Column name on which to perform filtering.
-                -   value:
-                    -   (list[float]):
-                            Include rows with column values in list. Can be
-                            arbitrarily long.
-                    -   (tuple[float]):
-                            Two-item tuple of form (lower bound, upper bound).
-                            Include rows with column values within the range
-                            described by tuple. Inclusive of endpoints.
+        Parameters
+        ----------
+        item : dict
+            key : str
+                Column name on which to perform filtering.
+            value : list | tuple[float, float]
+                List defines values to retain after filtering. Tuple of form
+                (lower bound, upper bound) defines numerical values to retain
+                after filtering.
 
-        Returns:
-            (SWCGraph):
-                Instance with filtered data.
+        Returns
+        -------
+        SWCGraph
+            Instance with filtered data.
         """
         # mask data by column values
         subset = None
@@ -160,50 +148,44 @@ class SWCGraph:
             self,
             name: str
     ):
+        """Get up-to-date attribute values.
+
+        Parameters
+        ----------
+        name : str
+            Attribute to return.
+
+        Returns
+        -------
+        object
+            Attribute.
+
+        Raises
+        ------
+        AttributeError:
+            Attribute not defined.
         """
-        Get up-to-date attribute values.
+        match name:
+            case n if n in self.C_ALL:
+                attribute = self.data[name].copy().to_numpy()
+            case "center":
+                coords, mask = self.coords, self.type == 1
+                attribute = coords[np.argmax(mask)] if np.any(mask) else np.mean(
+                    coords, axis=0)
+            case "components":
+                node, parent = self.node, self.parent
+                parent[parent == 1] = -1
+                uf = cdu.classes.UnionFind(node.size)
+                for i, n in enumerate(node):
+                    if parent[i] != -1:
+                        uf.union(np.argmax(node == parent[i]), i)
 
-        Args:
-            name (str):
-                Attribute to return
-
-        Returns:
-            (varies):
-                Attribute.
-
-        Raises:
-            AttributeError:
-                Attribute name not recognised.
-        """
-        # entire column from swc file as numpy array.
-        if name in self.C_ALL:
-            attribute = self.data[name].copy().to_numpy()
-
-        # node coordinates as numpy array. Of shape (nodes, z y x).
-        elif name == "coords":
-            attribute = np.round(
-                self.data[self.C_ZYX].copy().to_numpy()).astype(int)
-
-        # coordinates of soma if present, otherwise center of mass. (z, y, x).
-        elif name == "center":
-            coords, mask = self.coords, self.type == 1
-            attribute = coords[np.argmax(mask)] if np.any(mask) else np.mean(
-                coords, axis=0)
-
-        # mask of connected component labels
-        elif name == "components":
-            node, parent = self.node, self.parent
-            parent[parent == 1] = -1
-            uf = cdu.classes.UnionFind(node.size)
-            for i, n in enumerate(node):
-                if parent[i] != -1:
-                    uf.union(np.argmax(node == parent[i]), i)
-
-            attribute = uf.update()[0]
-
-        # raise an error if no such attribute found
-        else:
-            raise AttributeError(f"Skeleton has no attribute named {name}")
+                attribute = uf.update()[0]
+            case "coords":
+                attribute = np.round(
+                    self.data[self.C_ZYX].copy().to_numpy()).astype(int)
+            case _:
+                raise AttributeError(f"Skeleton has no attribute named {name}")
 
         return attribute
 
@@ -213,30 +195,30 @@ class SWCGraph:
             skeleton_swc: Path,
             resolution: dict[str: float] = None
     ):
-        """
-        Instantiate from an existing swc file.
+        """Instantiate from an existing swc file.
 
-        NOTE: There is prominent inter-group variability in the naming and
-        saving schemes used to create swc files. Thus, this class assumes the
-        following:
+        Parameters
+        ----------
+        skeleton_swc : Path
+            Path to skeleton representation of neuronal morphology (swc).
+        resolution : dict, optional
+            Passed to __init__ constructor.
+            Defaults to None.
+
+        Returns
+        -------
+        SWCGraph
+            Skeleton instance loaded from file.
+
+        Notes
+        -----
+        There is prominent intergroup variability in the naming and saving swc
+        files. This class assumes:
         -   swc file is formatted as a csv file with " " or "," separators.
         -   Each row has 7 numerical columns in a standard order:
             node id, type, x/y/z coordinates, node radius, and parent node id.
-        -   The first data row contains numeric entries only.
-        -   Each file may contain an arbitrary number of leading non-data rows.
-
-        Args:
-            skeleton_swc (Path):
-                Path to skeleton representation of neuronal morphology (swc).
-            resolution (dict, optional):
-                Passed to __init__ constructor.
-                Defaults to None.
-
-        Returns:
-            (SWCGraph):
-                Skeleton instance loaded from file.
+        -   The first relevant data row contains numeric entries only.
         """
-        # load swc file
         data = pd.read_csv(
             skeleton_swc, sep=r"[, ]+", engine="python",
             skiprows=cdu_f.csvs.find_first_row(skeleton_swc), header=None)
@@ -248,19 +230,20 @@ class SWCGraph:
             raw_text: str,
             resolution: dict[str: float] = None
     ):
-        """
-        Instantiate from a csv-like raw text string.
+        """Instantiate from a csv-like raw text string.
 
-        Args:
-            raw_text (str):
-                Entire contents of csv file as string.
-            resolution (dict, optional):
-                Passed to __init__ constructor.
-                Defaults to None.
+        Parameters
+        ----------
+        raw_text : str
+            Entire contents of csv file as string.
+        resolution : dict, optional
+            Passed to __init__ constructor.
+            Defaults to None.
 
-        Returns:
-            (SWCGraph):
-                Skeleton instance loaded from text data.
+        Returns
+        -------
+        SWCGraph
+            Skeleton instance loaded from text data.
         """
         # load swc file
         data = pd.read_csv(
@@ -278,38 +261,37 @@ class SWCGraph:
             radii: np.ndarray = None,
             resolution: dict[str: float] = None
     ):
-        """
-        Instantiate from node coordinates and known parent ids.
+        """Instantiate from node coordinates and known parent ids.
 
-        Args:
-            coords (np.ndarray):
-                Coordinates of each node in pixels, unless resolution is
-                specified. Of shape (nodes, 3) with the second axis ordered as
-                (z, y, x).
-            parents (np.ndarray):
-                Parent node id of each node. Of shape (nodes,).
-            nodes (np.ndarray, optional):
-                Node ids. Of shape (nodes,).
-                Defaults to None, in which case node id is inferred from index.
-            types (np.ndarray, optional):
-                Node types. Of shape (nodes,). 1 soma, 2 axon, 3 dendrite.
-                Defaults to None, in which case node types default to 1.
-            radii (np.ndarray, optional):
-                Node radii. Of shape (nodes,).
-                Defaults to None, in which case node radii default to 1.
-            resolution (dict, optional):
-                Passed to __init__ constructor.
-                Defaults to None.
+        Parameters
+        ----------
+        coords : np.ndarray
+            Coordinates of each node in pixels, unless resolution is specified.
+            Of shape (nodes, 3) with the second axis ordered as (z, y, x).
+        parents : np.ndarray
+            Parent node id of each node. Of shape (nodes,).
+        nodes : np.ndarray, optional
+            Node ids. Of shape (nodes,).
+            Defaults to None, in which case node id is inferred from index.
+        types : np.ndarray, optional
+            Node types. Of shape (nodes,). 1 soma, 2 axon, 3 dendrite.
+            Defaults to None, in which case node types default to 1.
+        radii : np.ndarray, optional
+            Node radii. Of shape (nodes,).
+            Defaults to None, in which case node radii default to 1.
+        resolution : dict, optional
+            Passed to __init__ constructor.
+            Defaults to None.
 
-        Returns:
-            (SWCGraph):
-                Skeleton instance assembled from components.
+        Returns
+        -------
+        SWCGraph
+            Skeleton instance assembled from components.
         """
         # fill missing columns with default values
-        nodes = (
-            np.arange(coords.shape[0]) if nodes is None else nodes)[:, None]
-        types = (np.ones(nodes.shape[0]) if types is None else types)[:, None]
-        radii = (np.ones(nodes.shape[0]) if radii is None else radii)[:, None]
+        nodes = (nodes or np.arange(coords.shape[0]))[:, None]
+        types = (types or np.ones(nodes.shape[0]))[:, None]
+        radii = (radii or np.ones(nodes.shape[0]))[:, None]
 
         # stack data into dataframe
         data = pd.DataFrame(np.concatenate(
@@ -322,19 +304,24 @@ class SWCGraph:
             file_swc: Path,
             microns: bool
     ):
-        """
-        Save stored data as an .swc file. Save will convert coordinate values
-        to microns before saving, and back to pixels after.
+        """Save stored data as an .swc file.
 
-        Args:
-            file_swc (Path):
-                Path to save stored data (swc).
-            microns (bool):
-                If True, convert coordinates to microns before saving.
+        Parameters
+        ----------
+        file_swc : Path
+            Path to save stored data (swc).
+        microns : bool
+            If True, convert coordinates to microns before saving.
 
-        Returns:
-            (SWCGraph):
-                Instance.
+        Returns
+        -------
+        SWCGraph
+            Instance.
+
+        Notes
+        -----
+        Save will convert coordinate values to microns before saving, and back
+        to pixels after.
         """
         # convert coordinate values from pixels to microns
         if microns:
@@ -356,17 +343,19 @@ class SWCGraph:
             self,
             resolution: dict[str: float]
     ):
-        """
-        Update resolution of specified coordinate columns.
-        Args:
-            resolution (dict):
-                Pixel resolution, in microns, of each spatial dimension. Used
-                to convert coordinates in microns to coordinates in pixels. Key
-                is the dimension ("z", "y", "x") and value is resolution.
+        """Update resolution of coordinate columns.
 
-        Returns:
-            (SWCGraph):
-                Instance with updated spatial resolution.
+        Parameters
+        ----------
+        resolution : dict
+            Pixel resolution, in microns, of each spatial dimension. Used to
+            convert coordinates in microns to coordinates in pixels. Key is the
+            dimension ("z", "y", "x") and value is resolution.
+
+        Returns
+        -------
+        SWCGraph
+            Instance with updated spatial resolution.
         """
         c_new = [k for k in resolution if k in self.resolution]
         c_old = [k for k in self.resolution if k in c_new]
@@ -385,22 +374,20 @@ class SWCGraph:
             self,
             pad: int = 0
     ):
-        """
-        Get the coordinates of a bounding box that includes all nodes in the
-        underlying neuronal morphology.
+        """Get coordinates of bounding box that includes all nodes.
 
-        Args:
-            pad (int, optional):
-                Symmetric padding on all faces of the extracted bounding box.
-                Defaults to 0.
+        Parameters
+        ----------
+        pad : int, optional
+            Symmetric padding on all faces of the extracted bounding box.
+            Defaults to 0.
 
-        Returns:
-            (tuple):
-                Contains two items, each with structure (z, y, x):
-                -   min_idx (np.ndarray):
-                        Minimum integer coordinates across all three axes.
-                -   max_idx (np.ndarray):
-                        Maximum integer coordinates across all three axes.
+        Returns
+        -------
+        min_idx : np.ndarray
+            Minimum integer coordinates across all three axes. (z, y, x).
+        max_idx : np.ndarray
+            Maximum integer coordinates across all three axes. (z, y, x).
         """
         min_idx = np.min(self.coords, axis=0) - pad
         min_idx[min_idx < 0] = 0
@@ -411,19 +398,40 @@ class SWCGraph:
             self,
             offset: np.ndarray
     ):
-        """
-        Translate stored coordinates by specified offset in pixels.
-        Args:
-            offset (np.ndarray):
-                Number of pixels to translate nodes per axis. Of shape
-                (z, y, x).
+        """Translate stored coordinates by specified offset in pixels.
 
-        Returns:
-            (SWCGraph):
-                Instance with translated coordinates.
+        Parameters
+        ----------
+        offset : np.ndarray
+            Number of pixels to translate nodes per axis. (z, y, x).
+
+        Returns
+        -------
+        SWCGraph
+            Instance with translated coordinates.
         """
         self.data[self.C_ZYX] = self.data[self.C_ZYX] - offset
         return self
+
+    def get_distances(
+            self,
+            center: np.ndarray = None
+    ):
+        """Return the distance between each node and reference point.
+
+        Parameters
+        ----------
+        center : np.ndarray, optional
+            Point against which to compute distances. (z, y, x).
+            Defaults to None, in which case center point is soma.
+
+        Returns
+        -------
+        np.ndarray
+            Euclidean distance between each node and reference point. (nodes,).
+        """
+        distances = (self.coords - np.array(center or self.center)[None]) ** 2
+        return np.sqrt(np.sum(distances, axis=1))
 
     # def get_mask(
     #         self,
@@ -498,24 +506,4 @@ class SWCGraph:
     #         aniso=[self.resolution[k] for k in self.C_ZYX])
     #     return (255 * (mask != 0)).astype(np.uint8), distances, times
 
-    def get_distances(
-            self,
-            center: np.ndarray = None
-    ):
-        """
-        Return the distance between each node and some reference point.
 
-        Args:
-            center (np.ndarray, optional):
-                Point against which to compute distances. (z, y, x).
-                Defaults to None, in which case center point is determined from
-                arealize.classes.Skeleton.get_center function.
-
-        Returns:
-            (np.ndarray):
-                Euclidean distance between each node and reference point. Of
-                shape (nodes,).
-        """
-        center = self.center if center is None else center
-        distances = (self.coords - np.array(center)[None]) ** 2
-        return np.sqrt(np.sum(distances, axis=1))
