@@ -430,12 +430,12 @@ class CoreDataset(Dataset):
         If `meta_var` has multiple entries, they are sorted in the order that
         they appear in instance hierarchical index.
         """
-        if type(meta_var) is str or len(meta_var) == 1:
+        if isinstance(meta_var, str) or len(meta_var) == 1:
             meta_var = meta_var[0] if isinstance(meta_var, list) else meta_var
             metadata = self.meta.index.get_level_values(meta_var).to_numpy()
         else:
             meta_var = sorted(
-                meta_var, key=lambda n: self.meta.index.names._index(n))
+                meta_var, key=lambda n: self.meta.index.names.index(n))
             metadata = self.meta.index.to_frame(index=False)[meta_var].astype(
                 str).agg("-".join, axis=1).to_numpy()
 
