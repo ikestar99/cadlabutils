@@ -395,29 +395,26 @@ class CoreTrainer(ABC):
             self.model, train=train, device=self.device, dtype=self.dtypes[0])
 
         # loop over dataset once
-        r_stats = []
+        r_stats, t_0 = [], time.time()
         for sample, target in loader:
             # forward pass, backpropagation, optimization, and statistics
-            delta = time.time()
             output, loss, target = self._step(sample, target, train=train)
-            delta = (time.time() - delta) / sample.size(dim=0)
-            r_stats += [[delta, loss.item(), self._step_stats(output, target)]]
+            r_stats += [[loss.item(), self._step_stats(output, target)]]
             self._track_memory()
             del output, loss, target
 
         # compute statistics and clean up after epoch
-        agg_time, agg_loss, agg_acc = np.mean(np.array(r_stats), axis=0)
+        agg_time = (time.time() - t_0) / len(loader)
         self._epoch_reset(epoch, train=train)
 
         # save data
         mode = "train" if train else "valid"
-        data = [
-            len(loader.dataset), self.batch_size, epoch, mode, agg_time,
-            agg_loss, agg_acc]
+        data = [len(loader.dataset), self.batch_size, epoch, mode, agg_time]
+        data += np.mean(np.array(r_stats), axis=0).tolist()
         stats = pd.DataFrame(
             [self.names + self.coords + data], columns=self.COLS, index=[0])
         cdu_f.csvs.append_data(file=self.stat_csv, data=stats, index=False)
-        return agg_loss, agg_acc
+        return data[-2], data[-1]
 
     def pull_stats(
             self,

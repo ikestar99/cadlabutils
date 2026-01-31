@@ -399,7 +399,8 @@ def get_mean_std(
         arr: np.ndarray,
         axis: int = 0,
         step: int = 20,
-        mean: float = None
+        mean: float = None,
+        ignore: float = None
 ):
     """Apply two-pass algorithm to compute mean and std of large array.
 
@@ -416,6 +417,9 @@ def get_mean_std(
     mean : float, optional
         Mean value in `arr` if already known.
         Defaults to None
+    ignore : float, optional
+        Values in `arr` to ignore during computation.
+        Defaults to None, in which case all values are used.
 
     Returns
     -------
@@ -426,7 +430,7 @@ def get_mean_std(
     """
     idx = [slice(None) for _ in arr.shape]
     idx[axis] = 0
-    total_count = np.prod(arr.shape)
+    total_count = 0
 
     # First pass: mean
     if mean is None:
@@ -435,7 +439,9 @@ def get_mean_std(
             indices = [slice(None) for _ in arr.shape]
             indices[axis] = slice(i, min(i + step, arr.shape[axis]))
             chunk = arr[tuple(indices)]
+            chunk = chunk[slice(None) if ignore is None else chunk != ignore]
             total_sum += np.sum(chunk)
+            total_count += chunk.size
 
         mean = total_sum / total_count
 
@@ -445,6 +451,7 @@ def get_mean_std(
         indices = [slice(None) for _ in arr.shape]
         indices[axis] = slice(i, min(i + step, arr.shape[axis]))
         chunk = arr[tuple(indices)]
+        chunk = chunk[slice(None) if ignore is None else chunk != ignore]
         total_sq_diff += np.sum((chunk - mean) ** 2)
 
     std = np.sqrt(total_sq_diff / (total_count - 1))

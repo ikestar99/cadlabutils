@@ -11,6 +11,7 @@ from io import StringIO
 from pathlib import Path
 
 # 2. Third-party library imports
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -432,6 +433,53 @@ class SWCGraph:
         """
         distances = (self.coords - np.array(center or self.center)[None]) ** 2
         return np.sqrt(np.sum(distances, axis=1))
+
+    def plot(
+            self,
+            png_path: Path,
+            fig_min: float = 6,
+            scale: float = 2.0
+    ):
+        """Plot edges stored in swc file.
+
+        Parameters
+        ----------
+        fig_min : float, optional
+        scale : float, optional
+
+        """
+        # infer figsize from SWC coordinates
+        min_idx, max_idx = self.get_bounds()
+        figsize = (max_idx - min_idx)[1:]
+        figsize = tuple(((figsize / np.min(figsize)) * fig_min)[::-1])
+
+
+        # index nodes by id
+        idx = {nid: i for i, nid in enumerate(nodes["id"])}
+
+        # Prepare plot
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_facecolor("white")
+
+        # Draw each edge
+        for i in range(len(nodes["id"])):
+            parent = nodes["parent"][i]
+            if parent == -1 or parent not in idx:
+                continue
+
+            j = idx[parent]
+
+            x1, y1 = nodes["x"][i], nodes["y"][i]
+            x2, y2 = nodes["x"][j], nodes["y"][j]
+
+            ax.plot([x1, x2], [y1, y2], color=self.COLORS[nodes["type"][i] - 1], linewidth=nodes["r"][i] * scale)
+
+        # ax.axis("equal")
+        ax.axis("off")
+        plt.savefig(swc_path.with_suffix(".png"), dpi=300, bbox_inches="tight",
+                    pad_inches=0, facecolor="white")
+        plt.close()
+
 
     # def get_mask(
     #         self,
