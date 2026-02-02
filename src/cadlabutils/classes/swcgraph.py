@@ -555,3 +555,59 @@ class SWCGraph:
     #     return (255 * (mask != 0)).astype(np.uint8), distances, times
 
 
+# def plot_swc_2d(swc_path, downsample_step=None, linewidth_scale=2.0, type_colors=None):
+#     """
+#     Visualize SWC collapsed into 2D (x,y), color edges by node type,
+#     adjustable line thickness, save to PNG (white background).
+#     """
+#     nodes = load_swc(swc_path)
+#     if downsample_step is not None:
+#         nodes = downsample_swc(nodes, step=downsample_step)
+#
+#     # infer figsize from SWC coordinates
+#     figsize = infer_figsize_from_coords(nodes["x"], nodes["y"])
+#
+#     # default SWC colors (editable)
+#     if type_colors is None:
+#         type_colors = {
+#             1: "black",  # soma
+#             2: axon_color,    # axon
+#             3: dendrite_color,   # basal dendrite
+#             4: "green",  # apical dendrite
+#             5: "purple",
+#             6: "orange",
+#         }
+#
+#     # index nodes by id
+#     idx = {nid: i for i, nid in enumerate(nodes["id"])}
+#
+#     # Prepare plot
+#     fig, ax = plt.subplots(figsize=figsize)
+#     ax.set_facecolor("white")
+#
+#     # Draw each edge
+#     for i in range(len(nodes["id"])):
+#         nid = nodes["id"][i]
+#         parent = nodes["parent"][i]
+#
+#         if parent == -1 or parent not in idx:
+#             continue
+#
+#         j = idx[parent]
+#
+#         x1, y1 = nodes["x"][i], nodes["y"][i]
+#         x2, y2 = nodes["x"][j], nodes["y"][j]
+#
+#         ntype = nodes["type"][i]
+#         color = type_colors.get(int(ntype), "gray")
+#
+#         r = nodes["r"][i]
+#         lw = max(0.3, r * linewidth_scale)
+#
+#         ax.plot([x1, x2], [y1, y2], color=color, linewidth=lw)
+#
+#     # ax.axis("equal")
+#     ax.axis("off")
+#     plt.savefig(swc_path.with_suffix(".png"), dpi=300, bbox_inches="tight", pad_inches=0, facecolor="white")
+#     plt.close()
+
