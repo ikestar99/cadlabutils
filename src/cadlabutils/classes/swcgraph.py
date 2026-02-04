@@ -185,6 +185,8 @@ class SWCGraph:
             case "coords":
                 attribute = np.round(
                     self.data[self.C_ZYX].copy().to_numpy()).astype(int)
+            case "has_soma":
+                attribute = 1 in self.type
             case _:
                 raise AttributeError(f"Skeleton has no attribute named {name}")
 
@@ -444,40 +446,37 @@ class SWCGraph:
 
         Parameters
         ----------
+        png_path : Path
         fig_min : float, optional
         scale : float, optional
-
         """
         # infer figsize from SWC coordinates
         min_idx, max_idx = self.get_bounds()
         figsize = (max_idx - min_idx)[1:]
-        figsize = tuple(((figsize / np.min(figsize)) * fig_min)[::-1])
-
-
-        # index nodes by id
-        idx = {nid: i for i, nid in enumerate(nodes["id"])}
-
-        # Prepare plot
-        fig, ax = plt.subplots(figsize=figsize)
+        fig, ax = plt.subplots(
+            figsize=tuple(((figsize / np.min(figsize)) * fig_min)[::-1]))
         ax.set_facecolor("white")
 
-        # Draw each edge
-        for i in range(len(nodes["id"])):
-            parent = nodes["parent"][i]
-            if parent == -1 or parent not in idx:
+        # extract node coordinates, labels, and sizes
+        nodes, coords = self.node, self.coords
+        coords[-2] = -(coords[:, -2] - np.max(coords[:, -2]))
+        for i, (c, t, p, r) in enumerate(
+                zip(coords, self.type, self.parent, self.radius)):
+            pdx = np.argmax(nodes == p)
+            if p == -1 or pdx == 0:
                 continue
 
-            j = idx[parent]
+            ax.plot(
+                [c[-1], coords[pdx, -1]], [c[-2], coords[pdx, -2]],
+                color=self.COLORS[t - 1], linewidth=r * scale)
 
-            x1, y1 = nodes["x"][i], nodes["y"][i]
-            x2, y2 = nodes["x"][j], nodes["y"][j]
-
-            ax.plot([x1, x2], [y1, y2], color=self.COLORS[nodes["type"][i] - 1], linewidth=nodes["r"][i] * scale)
+        if self.has_soma:
+            sdx = np.argmax(self.type == 1)
 
         # ax.axis("equal")
         ax.axis("off")
-        plt.savefig(swc_path.with_suffix(".png"), dpi=300, bbox_inches="tight",
-                    pad_inches=0, facecolor="white")
+        plt.savefig(
+            png_path, dpi=300, bbox_inches="tight", pad_inches=0)  # , facecolor="white")
         plt.close()
 
 
@@ -553,61 +552,3 @@ class SWCGraph:
     #         255 - chunk if invert else chunk, seeds=seeds, d_max=d_max,
     #         aniso=[self.resolution[k] for k in self.C_ZYX])
     #     return (255 * (mask != 0)).astype(np.uint8), distances, times
-
-
-# def plot_swc_2d(swc_path, downsample_step=None, linewidth_scale=2.0, type_colors=None):
-#     """
-#     Visualize SWC collapsed into 2D (x,y), color edges by node type,
-#     adjustable line thickness, save to PNG (white background).
-#     """
-#     nodes = load_swc(swc_path)
-#     if downsample_step is not None:
-#         nodes = downsample_swc(nodes, step=downsample_step)
-#
-#     # infer figsize from SWC coordinates
-#     figsize = infer_figsize_from_coords(nodes["x"], nodes["y"])
-#
-#     # default SWC colors (editable)
-#     if type_colors is None:
-#         type_colors = {
-#             1: "black",  # soma
-#             2: axon_color,    # axon
-#             3: dendrite_color,   # basal dendrite
-#             4: "green",  # apical dendrite
-#             5: "purple",
-#             6: "orange",
-#         }
-#
-#     # index nodes by id
-#     idx = {nid: i for i, nid in enumerate(nodes["id"])}
-#
-#     # Prepare plot
-#     fig, ax = plt.subplots(figsize=figsize)
-#     ax.set_facecolor("white")
-#
-#     # Draw each edge
-#     for i in range(len(nodes["id"])):
-#         nid = nodes["id"][i]
-#         parent = nodes["parent"][i]
-#
-#         if parent == -1 or parent not in idx:
-#             continue
-#
-#         j = idx[parent]
-#
-#         x1, y1 = nodes["x"][i], nodes["y"][i]
-#         x2, y2 = nodes["x"][j], nodes["y"][j]
-#
-#         ntype = nodes["type"][i]
-#         color = type_colors.get(int(ntype), "gray")
-#
-#         r = nodes["r"][i]
-#         lw = max(0.3, r * linewidth_scale)
-#
-#         ax.plot([x1, x2], [y1, y2], color=color, linewidth=lw)
-#
-#     # ax.axis("equal")
-#     ax.axis("off")
-#     plt.savefig(swc_path.with_suffix(".png"), dpi=300, bbox_inches="tight", pad_inches=0, facecolor="white")
-#     plt.close()
-
