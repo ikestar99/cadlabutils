@@ -85,16 +85,12 @@ class _UNet(nn.Module):
             c_i: int,
             c_o: int,
             c_m: int = 32,
-            c_t: tuple[int, ...] = None,
+            c_t: tuple[int, ...] = (64, 128, 256, 512),
             act: type = nn.ReLU,
             drop: float = None,
             **kwargs
     ):
         super(_UNet, self).__init__()
-        if c_t is None:
-            c_t = (64, 128, 256, 512, 1024)
-            c_t = c_t if self._D_I == 2 else c_t[:len(c_t) - 1]
-
         self.depth = len(c_t) - 1
         self.act = act
         self.drop = drop
