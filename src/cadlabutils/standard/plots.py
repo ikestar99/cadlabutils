@@ -31,11 +31,11 @@ def style_ax(
         y_label: str = None,
         x_ticks: tuple[float, ...] = None,
         y_ticks: tuple[float, ...] = None,
-        tick_size: int = 20,
-        label_size: int = 20,
+        tick_size: int = 30,
+        label_size: int = 25,
         label_weight: str = "bold",
         label_color: str = "black",
-        line_width: int = 3
+        line_width: int = 5
 ):
     for spine in ax.spines.values():
         spine.set(color=label_color, linewidth=line_width)

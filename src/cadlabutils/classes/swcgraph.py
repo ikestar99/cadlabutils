@@ -11,6 +11,7 @@ from io import StringIO
 from pathlib import Path
 
 # 2. Third-party library imports
+from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -454,29 +455,38 @@ class SWCGraph:
         min_idx, max_idx = self.get_bounds()
         figsize = (max_idx - min_idx)[1:]
         fig, ax = plt.subplots(
-            figsize=tuple(((figsize / np.min(figsize)) * fig_min)[::-1]))
+            figsize=tuple(((figsize / np.min(figsize)) * fig_min)[::-1])
+        )
         ax.set_facecolor("white")
 
-        # extract node coordinates, labels, and sizes
-        nodes, coords = self.node, self.coords
-        coords[-2] = -(coords[:, -2] - np.max(coords[:, -2]))
-        for i, (c, t, p, r) in enumerate(
-                zip(coords, self.type, self.parent, self.radius)):
-            pdx = np.argmax(nodes == p)
-            if p == -1 or pdx == 0:
-                continue
+        nodes, coords = self.node, self.coords.copy()
+        coords[:, -2] = -(coords[:, -2] - coords[:, -2].max())
+        node_to_idx = {nid: i for i, nid in enumerate(nodes)}
 
-            ax.plot(
-                [c[-1], coords[pdx, -1]], [c[-2], coords[pdx, -2]],
-                color=self.COLORS[t - 1], linewidth=r * scale)
+        # map parent ids -> indices
+        parent_idx = np.array(
+            [node_to_idx.get(p, -1) for p in self.parent], dtype=int)
+        valid = (self.parent != -1) & (parent_idx != -1)
+        child_idx = np.nonzero(valid)[0]
+        parent_idx = parent_idx[valid]
+
+        segments = np.stack(
+            [coords[child_idx][:, [-1, -2]], coords[parent_idx][:, [-1, -2]]],
+            axis=1)
+
+        lc = LineCollection(
+            segments, colors=[self.COLORS[t - 1] for t in self.type[valid]],
+            linewidths=self.radius[valid] * scale, capstyle="round",
+            joinstyle="round")
+        ax.add_collection(lc)
+        ax.autoscale()
 
         if self.has_soma:
             sdx = np.argmax(self.type == 1)
+            # (no plotting here in original, so left as-is)
 
-        # ax.axis("equal")
         ax.axis("off")
-        plt.savefig(
-            png_path, dpi=300, bbox_inches="tight", pad_inches=0)  # , facecolor="white")
+        plt.savefig(png_path, dpi=300, bbox_inches="tight", pad_inches=0)
         plt.close()
 
 
