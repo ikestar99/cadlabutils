@@ -74,7 +74,7 @@ def get_substack(
     """
     # directory of single .tif images
     if source.is_dir():
-        files = sorted(source.glob("*.tif"))
+        files = natsort.natsorted(source.glob("*.tif"))
         idx = range(len(files)) if i_range is None else i_range
         arr = np.stack([tf.imread(files[i]) for i in idx], axis=0)
 

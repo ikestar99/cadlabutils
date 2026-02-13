@@ -168,3 +168,26 @@ def get_tree(
             "mosaic": image.mosaic_position}
 
     return tree
+
+
+class LifWrapper:
+    def __init__(
+            self,
+            lif_image: LifImage,
+            dim_order: tuple[str, ...] = ("M", "C", "T", "Z")
+    ):
+        self.lif_image = lif_image
+        shape, _ = get_metadata(lif_image)
+        self.dims = [d for s, d in zip(shape[:-2], dim_order) if s > 1]
+        self.flatten = []
+
+    def __getitem__(
+            self,
+            *args
+    ):
+        get_kwargs = {}
+        for d, idx in zip(self.dims, args):
+            value = [idx] if isinstance(idx, int) else [i for i in idx]
+            get_kwargs[f"{d}_range".lower()] = value
+
+        array = get_substack(self.lif_image, **get_kwargs)
