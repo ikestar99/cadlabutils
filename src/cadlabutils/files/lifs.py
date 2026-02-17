@@ -14,6 +14,9 @@ import numpy as np
 from readlif.reader import LifFile, LifImage
 
 
+CHANNEL_ORDER =  ("M", "C", "T", "Z", "Y", "X")
+
+
 def get_metadata(
         lif_image: LifImage
 ):
@@ -171,23 +174,52 @@ def get_tree(
 
 
 class LifWrapper:
+    """Convenience wrapper to index lif images like numpy arrays.
+
+    Attributes
+    ----------
+    lif_image : LifImage
+        Opened lif image.
+    dims : tuple[str, ...]
+        Non-singleton leading dimensions (all but "Y", "X") present in
+        `lif_image`. Subset of ("M", "C", "T", "Z").
+
+    Parameters
+    ----------
+    lif_image : LifImage
+        Opened lif image.
+
+    Notes
+    -----
+    `LifWrapper` is a convenience wrapper around `get_substack` that provides
+    an indexing interface for mosaic tiles, channels, time points, and z slices
+    for lif images.
+    """
     def __init__(
             self,
-            lif_image: LifImage,
-            dim_order: tuple[str, ...] = ("M", "C", "T", "Z")
+            lif_image: LifImage
     ):
         self.lif_image = lif_image
         shape, _ = get_metadata(lif_image)
-        self.dims = [d for s, d in zip(shape[:-2], dim_order) if s > 1]
-        self.flatten = []
+        self.dims = [
+            d for s, d in zip(shape[:-2], CHANNEL_ORDER[:-2]) if s > 1]
+        self._crop = [
+            slice(None) if d in self.dims else 0 for d in CHANNEL_ORDER[:-2]]
 
     def __getitem__(
             self,
             *args
     ):
+        """Extract 2D "YX" images over a range of leading dimensions
+
+        Parameters
+        ----------
+        *args
+        """
         get_kwargs = {}
         for d, idx in zip(self.dims, args):
             value = [idx] if isinstance(idx, int) else [i for i in idx]
             get_kwargs[f"{d}_range".lower()] = value
 
-        array = get_substack(self.lif_image, **get_kwargs)
+        array = get_substack(self.lif_image, **get_kwargs)[*tuple(self._crop)]
+        return array
