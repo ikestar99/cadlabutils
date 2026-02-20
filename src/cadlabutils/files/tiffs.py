@@ -57,7 +57,7 @@ def get_substack(
     Parameters
     ----------
     source : str or Path
-        Path to a directory of images of to a single multipage image (.tif).
+        Path to a directory of images or to a single multipage image (.tif).
     i_range : tuple[int, ...] | list[int, ...] | None, optional
         Image indices to extract. If None, extract all images.
 
@@ -85,3 +85,52 @@ def get_substack(
             arr = np.stack([tif.pages[i].asarray() for i in idx], axis=0)
 
     return arr
+
+
+class TiffWrapper:
+    """Convenience wrapper to index tif stacks like numpy arrays.
+
+    Attributes
+    ----------
+    tif_path : Path
+
+    Parameters
+    ----------
+    tif_path : Path
+        Path to a directory of images or to a single multipage image (.tif).
+
+    Notes
+    -----
+    `LifWrapper` is a convenience wrapper around `get_substack` that provides
+    an indexing interface for a leading dimension (t frames or z slices).
+    """
+
+    def __init__(
+            self,
+            tif_path: Path
+    ):
+        self.tif_path = tif_path
+        self._n = (
+            get_metadata(self.tif_path)[0][0]
+            if tif_path.is_file()else len(list(self.tif_path.glob("*.tif"))))
+
+    def __getitem__(
+            self,
+            idx: tuple
+    ):
+        """Extract 2D "YX" images over a range of leading dimension.
+
+        Parameters
+        ----------
+        idx : tuple
+            Coordinates of image(s) to extract. Indices correspond to
+            ("M", "C", "T", "Z").
+
+        Returns
+        -------
+        np.ndarray
+            Extracted image(s). Singleton dimensions in lif file are collapsed,
+            whereas singleton dimensions from a single page extraction are
+            retained.
+        """
+        return get_substack(self.data, np.atleast_1d(np.arange(self._n)[idx]))

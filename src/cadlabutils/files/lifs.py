@@ -14,7 +14,7 @@ import numpy as np
 from readlif.reader import LifFile, LifImage
 
 
-CHANNEL_ORDER =  ("M", "C", "T", "Z", "Y", "X")
+CHANNEL_ORDER = ("M", "C", "T", "Z", "Y", "X")
 
 
 def get_metadata(
@@ -178,7 +178,7 @@ class LifWrapper:
 
     Attributes
     ----------
-    lif_image : LifImage
+    data : LifImage
         Opened lif image.
     dims : tuple[str, ...]
         Non-singleton leading dimensions (all but "Y", "X") present in
@@ -192,34 +192,42 @@ class LifWrapper:
     Notes
     -----
     `LifWrapper` is a convenience wrapper around `get_substack` that provides
-    an indexing interface for mosaic tiles, channels, time points, and z slices
-    for lif images.
+    an indexing interface for mosaic tiles, channels, t frames, and z slices.
     """
     def __init__(
             self,
-            lif_image: LifImage
+            lif_image: Path | LifImage,
+            idx: int = 0
     ):
-        self.lif_image = lif_image
-        shape, _ = get_metadata(lif_image)
+        self.data = get_image(
+            lif_image, idx) if isinstance(lif_image, Path) else lif_image
+        shape, _ = get_metadata(self.data)
         self.dims = [
-            d for s, d in zip(shape[:-2], CHANNEL_ORDER[:-2]) if s > 1]
+            (s, d) for s, d in zip(shape[:-2], CHANNEL_ORDER[:-2]) if s > 1]
         self._crop = [
             slice(None) if d in self.dims else 0 for d in CHANNEL_ORDER[:-2]]
 
     def __getitem__(
             self,
-            *args
+            idx: tuple
     ):
         """Extract 2D "YX" images over a range of leading dimensions
 
         Parameters
         ----------
-        *args
-        """
-        get_kwargs = {}
-        for d, idx in zip(self.dims, args):
-            value = [idx] if isinstance(idx, int) else [i for i in idx]
-            get_kwargs[f"{d}_range".lower()] = value
+        idx : tuple
+            Coordinates of image(s) to extract. Indices correspond to
+            ("M", "C", "T", "Z").
 
-        array = get_substack(self.lif_image, **get_kwargs)[*tuple(self._crop)]
-        return array
+        Returns
+        -------
+        np.ndarray
+            Extracted image(s). Singleton dimensions in lif file are collapsed,
+            whereas singleton dimensions from a single page extraction are
+            retained.
+        """
+        idx = idx if isinstance(idx, tuple) else (idx,)
+        get_kwargs = {
+            f"{d}_range".lower(): np.atleast_1d(np.arange(s)[i])
+            for (s, d), i in zip(self.dims, idx)}
+        return get_substack(self.data, **get_kwargs)[*tuple(self._crop)]
