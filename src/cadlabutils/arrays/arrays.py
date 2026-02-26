@@ -324,7 +324,8 @@ def masked_statistic(
 def project_arr(
         arr: np.ndarray,
         func: Callable,
-        step: int = 20
+        step: int = 20,
+        ignore: float = None
 ):
     """Generate projections along all axes of an array.
 
@@ -338,6 +339,9 @@ def project_arr(
     step : int, optional
         Step size when chunking `arr`.
         Defaults to 20.
+    ignore : float, optional
+        Values in `arr` to ignore during computation.
+        Defaults to None, in which case all values are used.
 
     Returns
     -------
@@ -351,7 +355,7 @@ def project_arr(
 
     Examples
     --------
-    Min intensity projection
+    Mean intensity projection
     >>> t_arr = np.arange(30).reshape(3, 10)
     >>> t_arr
     array([[ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9],
@@ -362,36 +366,69 @@ def project_arr(
     array([10., 11., 12., 13., 14., 15., 16., 17., 18., 19.])
     >>> proj_1
     array([ 4.5, 14.5, 24.5])
+
+    Projection with zero values ignored
+    >>> t_arr[:2, :5] = 0
+    >>> t_arr
+    array([[ 0,  0,  0,  0,  0,  5,  6,  7,  8,  9],
+           [ 0,  0,  0,  0,  0, 15, 16, 17, 18, 19],
+           [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]])
+    >>> proj_0, proj_1 = project_arr(t_arr, func=np.mean, ignore=0)
+    >>> proj_0
+    array([20., 21., 22., 23., 24., 15., 16., 17., 18., 19.])
+    >>> proj_1
+    array([ 7. , 17. , 24.5])
     """
     # if True, compute initial projection via slice-wise comparison
-    slice_by_slice = func in (np.min, np.max)
+    s_wise = func in (np.min, np.max, np.nanmin, np.nanmax)
 
-    # project slices along z, y, and x dimensions
+    # mask ignore values with np.nan
+    if ignore is not None:
+        try:
+            func = getattr(np, f"nan{func.__name__}")
+        except AttributeError:
+            pass  # no nan-version exists, use original func
+
     proj = [
         np.zeros([d for j, d in enumerate(arr.shape) if j != i])
         for i in range(len(arr.shape))]
+    dtype = arr[0].dtype
 
-    # chunk along first dimension
+    # chunk along first axis
     for idx in range(0, arr.shape[0], step):
         end = min(idx + step, arr.shape[0])
         sub = arr[idx:end]
+        if ignore is not None:
+            sub = np.where(sub == ignore, np.nan, sub.astype(float, copy=False))
 
-        # compute projections on subset
+        # Compute projections for subsequent axes
         for dim in range(1, len(arr.shape)):
             proj[dim][idx:end] = func(sub, axis=dim)
 
-        if slice_by_slice:
+        # Compute slice-wise first dim
+        if s_wise:
             val = func(sub, axis=0)
             proj[0] = val if idx == 0 else func(
                 np.stack([proj[0], val], axis=0), axis=0)
 
-    # update first projection if slice-by-slice comparison invalid
-    if not slice_by_slice:
-        proj[0] = np.concatenate([
-            func(arr[:, ydx: min(ydx + step, arr.shape[1])], axis=0)
-            for ydx in range(0, arr.shape[1], step)], axis=0)
+    # Non-slice-wise first axis
+    if not s_wise:
+        chunks = []
+        for ydx in range(0, arr.shape[1], step):
+            sub = arr[:, ydx:min(ydx + step, arr.shape[1])]
+            if ignore is not None:
+                sub = np.where(
+                    sub == ignore, np.nan, sub.astype(float, copy=False))
 
-    # return projections
+            chunks.append(func(sub, axis=0))
+
+        proj[0] = np.concatenate(chunks, axis=0)
+
+    for i in range(len(proj)):
+        proj[i] = np.nan_to_num(proj[i], nan=ignore) if np.any(
+            np.isnan(proj[i])) else proj[i]
+        proj[i] = proj[i].astype(dtype) if s_wise else proj[i]
+
     return proj
 
 

@@ -92,7 +92,7 @@ class TiffWrapper:
 
     Attributes
     ----------
-    tif_path : Path
+    _data : Path
 
     Parameters
     ----------
@@ -109,10 +109,10 @@ class TiffWrapper:
             self,
             tif_path: Path
     ):
-        self.tif_path = tif_path
-        self._n = (
-            get_metadata(self.tif_path)[0][0]
-            if tif_path.is_file()else len(list(self.tif_path.glob("*.tif"))))
+        self._data = tif_path
+        self.n = (
+            get_metadata(self._data)[0][0]
+            if tif_path.is_file()else len(list(self._data.glob("*.tif"))))
 
     def __getitem__(
             self,
@@ -133,4 +133,4 @@ class TiffWrapper:
             whereas singleton dimensions from a single page extraction are
             retained.
         """
-        return get_substack(self.data, np.atleast_1d(np.arange(self._n)[idx]))
+        return get_substack(self._data, np.atleast_1d(np.arange(self.n)[idx]))

@@ -65,10 +65,10 @@ def get_image(
 
 def get_substack(
         lif_image: LifImage,
-        c_range: tuple[int, ...] | list[int, ...] | None,
-        t_range: tuple[int, ...] | list[int, ...] | None,
-        z_range: tuple[int, ...] | list[int, ...] | None,
-        m_range: tuple[int, ...] | list[int, ...] | None = (0,)
+        c_range: tuple[int, ...] | list[int, ...] = None,
+        t_range: tuple[int, ...] | list[int, ...] = None,
+        z_range: tuple[int, ...] | list[int, ...] = None,
+        m_range: tuple[int, ...] | list[int, ...] = None
 ):
     """Extract image data from Leica Lif Image.
 
@@ -76,12 +76,15 @@ def get_substack(
     ----------
     lif_image : LifImage
         Opened lif image.
-    c_range : tuple[int, ...] | list[int, ...] | None
-        Channel indices to extract. If None, extract all channels.
-    t_range : tuple[int, ...] | list[int, ...] | None
-        Frame indices to extract. If None, extract all frames.
-    z_range : tuple[int, ...] | list[int, ...] | None
-        Z slice indices to extract. If None, extract all z slices.
+    c_range : tuple[int, ...] | list[int, ...]
+        Channel indices to extract.
+        Defaults to None, extract all channels.
+    t_range : tuple[int, ...] | list[int, ...]
+        Frame indices to extract.
+        Defaults to None, extract all frames.
+    z_range : tuple[int, ...] | list[int, ...]
+        Z slice indices to extract.
+        Defaults to None, extract all z slices.
 
     Returns
     -------
@@ -178,7 +181,7 @@ class LifWrapper:
 
     Attributes
     ----------
-    data : LifImage
+    _data : LifImage
         Opened lif image.
     dims : tuple[str, ...]
         Non-singleton leading dimensions (all but "Y", "X") present in
@@ -199,13 +202,12 @@ class LifWrapper:
             lif_image: Path | LifImage,
             idx: int = 0
     ):
-        self.data = get_image(
+        self._data = get_image(
             lif_image, idx) if isinstance(lif_image, Path) else lif_image
-        shape, _ = get_metadata(self.data)
-        self.dims = [
+        shape, _ = get_metadata(self._data)
+        self._dims = [
             (s, d) for s, d in zip(shape[:-2], CHANNEL_ORDER[:-2]) if s > 1]
-        self._crop = [
-            slice(None) if d in self.dims else 0 for d in CHANNEL_ORDER[:-2]]
+        self._crop = [slice(None) if s > 1 else 0 for s in shape[:-2]]
 
     def __getitem__(
             self,
@@ -229,5 +231,5 @@ class LifWrapper:
         idx = idx if isinstance(idx, tuple) else (idx,)
         get_kwargs = {
             f"{d}_range".lower(): np.atleast_1d(np.arange(s)[i])
-            for (s, d), i in zip(self.dims, idx)}
-        return get_substack(self.data, **get_kwargs)[*tuple(self._crop)]
+            for (s, d), i in zip(self._dims, idx)}
+        return get_substack(self._data, **get_kwargs)[*tuple(self._crop)]
