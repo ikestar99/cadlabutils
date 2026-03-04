@@ -165,7 +165,7 @@ def get_tree(
         r = ["-" if r is None else r for r in list(image.scale[::-1])]
 
         # convert spatial resolutions to ¨m/pixel
-        r[1:] = [r if isinstance(r, str) else 1/r for r in r[1:]]
+        r[1:] = [r if isinstance(r, str) else 1 / r for r in r[1:]]
         tree[f"{i}: {image.name}"] = {
             "dtype": dtype,
             "channel": dims[1],
