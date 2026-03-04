@@ -628,7 +628,9 @@ class CoreTrainer(ABC):
         """
         model_path = self.peak_path if fold is None else self.my_dir.joinpath(
             f"fold {fold}")
-        batch_size = int(self.pull_stats().iloc[-1, 6])
+        if self.batch_size is None:
+            self.batch_size = int(self.pull_stats().iloc[-1, 6])
+
         self._initialize()
         self._track_memory()
         utils.load(model_path, self.model, device=self.device)
