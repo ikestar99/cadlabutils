@@ -223,6 +223,7 @@ class SWCGraph:
             node id, type, x/y/z coordinates, node radius, and parent node id.
         -   The first relevant data row contains numeric entries only.
         """
+        skeleton_swc = Path(skeleton_swc)
         data = pd.read_csv(
             skeleton_swc, sep=r"[, ]+", engine="python",
             skiprows=cdu_f.csvs.find_first_row(skeleton_swc), header=None)
@@ -482,8 +483,10 @@ class SWCGraph:
         ax.autoscale()
 
         if self.has_soma:
-            sdx = np.argmax(self.type == 1)
-            # (no plotting here in original, so left as-is)
+            idx = np.argmax(self.type == 1)
+            ax.scatter(
+                coords[idx, -1], coords[idx, -2], c=self.COLORS[0],
+                s=self.data.iloc[idx][self.C_R], zorder=3)
 
         ax.axis("off")
         plt.savefig(png_path, dpi=300, bbox_inches="tight", pad_inches=0)
