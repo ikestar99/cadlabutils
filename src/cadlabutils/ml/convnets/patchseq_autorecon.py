@@ -456,24 +456,6 @@ class Monkey2DRSUNetMulti(_RSUNetMulti):
         return x
 
 
-class RSUNetMulti3D(_RSUNetMulti):
-    def __init__(
-            self
-    ):
-        super(RSUNetMulti3D, self).__init__()
-
-    def forward(
-            self,
-            x: torch.tensor
-    ):
-        x = x if x.size(2) <= 32 else x.narrow(2, (x.size(2) - 32) // 2, 32)
-        x = super().forward(x)
-        x = x[:, :, *tuple([s // 2 for s in x.size()[2:]])]
-        x = torch.stack(
-            [x[:, 0], x[:, 1], torch.logsumexp(x[:, 2:], dim=1)], dim=1)
-        return x
-
-
 class Monkey3DRSUNetMulti(_RSUNetMulti):
     def __init__(
             self
@@ -488,4 +470,21 @@ class Monkey3DRSUNetMulti(_RSUNetMulti):
         x = super().forward(x)
         x = x[:, :, *tuple([s // 2 for s in x.size()[2:]])]
         x = x[:, [0, 2, 3]]  # background, axon, dendrite -- drop soma logit
+        return x
+
+
+class RSUNetMulti(_RSUNetMulti):
+    """Patched to output [background, soma, foreground] channels"""
+    def __init__(
+            self
+    ):
+        super(RSUNetMulti, self).__init__()
+
+    def forward(
+            self,
+            x: torch.tensor
+    ):
+        x = super().forward(x)
+        x = torch.stack(
+            [x[:, 0], x[:, 1], torch.logsumexp(x[:, 2:], dim=1)], dim=1)
         return x

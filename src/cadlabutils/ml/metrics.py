@@ -6,14 +6,16 @@ Created on Wed Aug 06 09:00:00 2025
 """
 
 
+# 1. Standard library imports
+import gc
+
 # 2. Third-party library imports
-import numpy as np
-from sklearn.metrics import confusion_matrix
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 # 3. Local application / relative imports
+import cadlabutils as cdu
 from .utils import forward_pass, set_mode
 
 
@@ -132,12 +134,16 @@ def simulate_batch_size(
                 model, sample=try_sample, device=device, target=try_target,
                 criterion=criterion, optimizer=optimizer,
                 sample_dtype=sample_dtype, target_dtype=target_dtype)
+            if device.type == "cpu":
+                r_u, r_t = cdu.get_ram(scale=3)
+                if r_u > r_t:
+                    raise MemoryError("exceeds available memory")
 
             # if successful, current high becomes new low
             bs_l = bs_h
             bs_h += delta if binary_search else bs_h
 
-        except RuntimeError as e:
+        except (RuntimeError, MemoryError) as e:
             if "memory" in str(e).lower():
                 # if memory error detected, switch to binary search
                 binary_search = True
@@ -149,6 +155,7 @@ def simulate_batch_size(
             # clean up GPU memory for next sweep
             del try_sample, try_target
             torch.cuda.empty_cache()
+            gc.collect()
 
 
 def classifier_stats(
