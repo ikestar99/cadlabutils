@@ -474,7 +474,7 @@ class Monkey3DRSUNetMulti(_RSUNetMulti):
 
 
 class RSUNetMulti(_RSUNetMulti):
-    """Patched to output [background, soma, foreground] channels"""
+    """Patched to output [background, foreground] channels"""
     def __init__(
             self
     ):
@@ -485,6 +485,5 @@ class RSUNetMulti(_RSUNetMulti):
             x: torch.tensor
     ):
         x = super().forward(x)
-        x = torch.stack(
-            [x[:, 0], x[:, 1], torch.logsumexp(x[:, 2:], dim=1)], dim=1)
+        x = torch.stack([x[:, 0], torch.logsumexp(x[:, 1:], dim=1)], dim=1)
         return x

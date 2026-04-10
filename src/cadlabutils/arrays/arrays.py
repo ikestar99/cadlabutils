@@ -263,8 +263,8 @@ def dtype_norm(
     info = np.iinfo if np.issubdtype(arr.dtype, np.integer) else np.finfo
     try:
         peak = max(abs(info(arr.dtype).min), info(arr.dtype).max)
-        normed = arr / peak
-        normed = normed - (offset / peak) if offset is not None else normed
+        normed = arr - offset if offset is not None else arr
+        normed = normed / peak
         return normed
     except ValueError:
         raise NotImplementedError(f"Cannot normalize {arr.dtype} array.")

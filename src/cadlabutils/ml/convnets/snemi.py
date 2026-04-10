@@ -420,3 +420,13 @@ class SNEMI2DClassifier(_D2, _SNEMIClassifier):
 
 class SNEMI3DClassifier(_D3, _SNEMIClassifier):
     pass
+
+
+class SNEMI3DHalfClassifier(_D3, _SNEMIClassifier):
+    def forward(
+            self,
+            x: torch.tensor,
+            **kwargs
+    ):
+        x = x if x.size(2) <= 32 else x.narrow(2, (x.size(2) - 32) // 2, 32)
+        return super().forward(x)

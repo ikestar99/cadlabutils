@@ -293,3 +293,13 @@ class UNet2DClassifier(_D2, _UNetClassifier):
 
 class UNet3DClassifier(_D3, _UNetClassifier):
     pass
+
+
+class UNet3DHalfClassifier(_D3, _UNetClassifier):
+    def forward(
+            self,
+            x: torch.tensor,
+            **kwargs
+    ):
+        x = x if x.size(2) <= 32 else x.narrow(2, (x.size(2) - 32) // 2, 32)
+        return super().forward(x)
