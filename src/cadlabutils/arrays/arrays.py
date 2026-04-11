@@ -10,6 +10,8 @@ Created on Tue July 4 13:06:21 2023
 from typing import Callable
 
 # 2. Third-party library imports
+from ..classes.nullobject import NullObject
+from .. import TreeBar
 import numpy as np
 import scipy.ndimage as scn
 import scipy.stats as sst
@@ -325,7 +327,9 @@ def project_arr(
         arr: np.ndarray,
         func: Callable,
         step: int = 20,
-        ignore: float = None
+        ignore: float = None,
+        pbar: TreeBar = NullObject(),
+        task_id: object = None
 ):
     """Generate projections along all axes of an array.
 
@@ -395,11 +399,13 @@ def project_arr(
     dtype = arr[0].dtype
 
     # chunk along first axis
+    pbar.reset(task_id, description="a_0", total=arr.shape[0], start=True)
     for idx in range(0, arr.shape[0], step):
         end = min(idx + step, arr.shape[0])
         sub = arr[idx:end]
         if ignore is not None:
-            sub = np.where(sub == ignore, np.nan, sub.astype(float, copy=False))
+            sub = np.where(
+                sub == ignore, np.nan, sub.astype(float, copy=False))
 
         # Compute projections for subsequent axes
         for dim in range(1, len(arr.shape)):
@@ -411,19 +417,25 @@ def project_arr(
             proj[0] = val if idx == 0 else func(
                 np.stack([proj[0], val], axis=0), axis=0)
 
+        pbar.update(task_id, completed=end)
+
     # Non-slice-wise first axis
     if not s_wise:
+        pbar.reset(task_id, description="a_1", total=arr.shape[1], start=True)
         chunks = []
         for ydx in range(0, arr.shape[1], step):
-            sub = arr[:, ydx:min(ydx + step, arr.shape[1])]
+            end = min(ydx + step, arr.shape[1])
+            sub = arr[:, ydx:end]
             if ignore is not None:
                 sub = np.where(
                     sub == ignore, np.nan, sub.astype(float, copy=False))
 
             chunks.append(func(sub, axis=0))
+            pbar.update(task_id, completed=end)
 
         proj[0] = np.concatenate(chunks, axis=0)
 
+    pbar.remove_task(task_id)
     for i in range(len(proj)):
         proj[i] = np.nan_to_num(proj[i], nan=ignore) if np.any(
             np.isnan(proj[i])) else proj[i]
@@ -437,7 +449,9 @@ def get_mean_std(
         axis: int = 0,
         step: int = 20,
         mean: float = None,
-        ignore: float = None
+        ignore: float = None,
+        pbar: TreeBar = NullObject(),
+        task_id: object = None
 ):
     """Apply two-pass algorithm to compute mean and std of large array.
 
@@ -472,25 +486,32 @@ def get_mean_std(
     # First pass: mean
     if mean is None:
         total_sum = 0.0
+        pbar.reset(task_id, description="µ", total=arr.shape[axis], start=True)
         for i in range(0, arr.shape[axis], step):
+            end = min(i + step, arr.shape[axis])
             indices = [slice(None) for _ in arr.shape]
-            indices[axis] = slice(i, min(i + step, arr.shape[axis]))
+            indices[axis] = slice(i, end)
             chunk = arr[tuple(indices)]
             chunk = chunk[slice(None) if ignore is None else chunk != ignore]
             total_sum += np.sum(chunk)
             total_count += chunk.size
+            pbar.update(task_id, completed=end)
 
         mean = total_sum / total_count
 
     # Second pass: variance
     total_sq_diff = 0.0
+    pbar.reset(task_id, description="σ", total=arr.shape[axis], start=True)
     for i in range(0, arr.shape[axis], step):
+        end = min(i + step, arr.shape[axis])
         indices = [slice(None) for _ in arr.shape]
-        indices[axis] = slice(i, min(i + step, arr.shape[axis]))
+        indices[axis] = slice(i, end)
         chunk = arr[tuple(indices)]
         chunk = chunk[slice(None) if ignore is None else chunk != ignore]
         total_sq_diff += np.sum((chunk - mean) ** 2)
+        pbar.update(task_id, completed=end)
 
+    pbar.remove_task(task_id)
     std = np.sqrt(total_sq_diff / (total_count - 1))
     return mean, std
 
