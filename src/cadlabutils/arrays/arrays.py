@@ -387,7 +387,7 @@ def project_arr(
     s_wise = func in (np.min, np.max, np.nanmin, np.nanmax)
 
     # mask ignore values with np.nan
-    if ignore is not None:
+    if ignore is not None and "nan" not in func.__name__:
         try:
             func = getattr(np, f"nan{func.__name__}")
         except AttributeError:
@@ -399,7 +399,8 @@ def project_arr(
     dtype = arr[0].dtype
 
     # chunk along first axis
-    pbar.reset(task_id, description="a_0", total=arr.shape[0], start=True)
+    _add = 0 if s_wise else arr.shape[1]
+    pbar.update(task_id, total=arr.shape[0] + _add)
     for idx in range(0, arr.shape[0], step):
         end = min(idx + step, arr.shape[0])
         sub = arr[idx:end]
@@ -407,21 +408,21 @@ def project_arr(
             sub = np.where(
                 sub == ignore, np.nan, sub.astype(float, copy=False))
 
-        # Compute projections for subsequent axes
-        for dim in range(1, len(arr.shape)):
-            proj[dim][idx:end] = func(sub, axis=dim)
+        with np.errstate(all="ignore"):
+            # Compute projections for subsequent axes
+            for dim in range(1, len(arr.shape)):
+                proj[dim][idx:end] = func(sub, axis=dim)
 
-        # Compute slice-wise first dim
-        if s_wise:
-            val = func(sub, axis=0)
-            proj[0] = val if idx == 0 else func(
-                np.stack([proj[0], val], axis=0), axis=0)
+            # Compute slice-wise first dim
+            if s_wise:
+                val = func(sub, axis=0)
+                proj[0] = val if idx == 0 else func(
+                    np.stack([proj[0], val], axis=0), axis=0)
 
         pbar.update(task_id, completed=end)
 
     # Non-slice-wise first axis
     if not s_wise:
-        pbar.reset(task_id, description="a_1", total=arr.shape[1], start=True)
         chunks = []
         for ydx in range(0, arr.shape[1], step):
             end = min(ydx + step, arr.shape[1])
@@ -430,12 +431,13 @@ def project_arr(
                 sub = np.where(
                     sub == ignore, np.nan, sub.astype(float, copy=False))
 
-            chunks.append(func(sub, axis=0))
-            pbar.update(task_id, completed=end)
+            with np.errstate(all="ignore"):
+                chunks.append(func(sub, axis=0))
+
+            pbar.update(task_id, completed=end + arr.shape[0])
 
         proj[0] = np.concatenate(chunks, axis=0)
 
-    pbar.remove_task(task_id)
     for i in range(len(proj)):
         proj[i] = np.nan_to_num(proj[i], nan=ignore) if np.any(
             np.isnan(proj[i])) else proj[i]
@@ -479,20 +481,24 @@ def get_mean_std(
     std : float
         Standard deviation of values in `arr`.
     """
+    def _extract_chunk(_arr, _axis, _i, _step, _ignore):
+        _end = min(i + _step, _arr.shape[axis])
+        indices = [slice(None) for _ in _arr.shape]
+        indices[_axis] = slice(_i, _end)
+        _chunk = _arr[tuple(indices)]
+        _chunk = _chunk[slice(None) if _ignore is None else _chunk != ignore]
+        return _chunk, _end
+
     idx = [slice(None) for _ in arr.shape]
     idx[axis] = 0
     total_count = 0
 
     # First pass: mean
+    pbar.update(task_id, total=arr.shape[axis] * 2)
     if mean is None:
         total_sum = 0.0
-        pbar.reset(task_id, description="µ", total=arr.shape[axis], start=True)
         for i in range(0, arr.shape[axis], step):
-            end = min(i + step, arr.shape[axis])
-            indices = [slice(None) for _ in arr.shape]
-            indices[axis] = slice(i, end)
-            chunk = arr[tuple(indices)]
-            chunk = chunk[slice(None) if ignore is None else chunk != ignore]
+            chunk, end = _extract_chunk(arr, axis, i, step, ignore)
             total_sum += np.sum(chunk)
             total_count += chunk.size
             pbar.update(task_id, completed=end)
@@ -501,17 +507,13 @@ def get_mean_std(
 
     # Second pass: variance
     total_sq_diff = 0.0
-    pbar.reset(task_id, description="σ", total=arr.shape[axis], start=True)
+    total_count = 0
     for i in range(0, arr.shape[axis], step):
-        end = min(i + step, arr.shape[axis])
-        indices = [slice(None) for _ in arr.shape]
-        indices[axis] = slice(i, end)
-        chunk = arr[tuple(indices)]
-        chunk = chunk[slice(None) if ignore is None else chunk != ignore]
+        chunk, end = _extract_chunk(arr, axis, i, step, ignore)
         total_sq_diff += np.sum((chunk - mean) ** 2)
-        pbar.update(task_id, completed=end)
+        total_count += chunk.size
+        pbar.update(task_id, completed=end + arr.shape[axis])
 
-    pbar.remove_task(task_id)
     std = np.sqrt(total_sq_diff / (total_count - 1))
     return mean, std
 

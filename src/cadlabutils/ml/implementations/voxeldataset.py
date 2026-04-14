@@ -80,7 +80,7 @@ class VoxelDataset(Dataset):
             raise ValueError(f"Voxel {voxel} must be subset of {data.shape}")
 
         self.add = add_channel
-        self.pad = np.array(pad or tuple([0] * self.shape.size))
+        self.pad = np.array(pad) if pad is not None else np.zeros(len(voxel))
         self.undo_pad = cdu_a.arr_slice(self.pad, self.pad + self.voxel)
         self._grid = self.shape // voxel
         self._index = np.arange(np.prod(self._grid))
@@ -121,21 +121,19 @@ class VoxelDataset(Dataset):
         m : torch.tensor
             Corresponding mask for `x` as a tensor. Only returned if instance
             `mask` attribute is not None.
-        vox_s : tuple[slice, ...]
-            A set of slices per axis in `data` that correspond to the unpadded
-            indices of `x` within underlying instance image data.
         """
         raw_s, vox_s, pad = self._idx_to_slice(idx)
 
-        x, m = self.data[*raw_s], None
+        x = self.data[*raw_s]
         x = x if pad is None else np.pad(x, pad, mode="reflect")
         x = torch.from_numpy(x[None] if self.add else x)
         if self.mask is not None:
             m = self.mask[*raw_s]
             m = m if pad is None else np.pad(m, pad, mode="reflect")
             m = torch.from_numpy(m[None] if self.add else m)
+            return x, m
 
-        return x, m, vox_s
+        return x
 
     def _idx_to_slice(
             self,
@@ -175,3 +173,9 @@ class VoxelDataset(Dataset):
         pad = None if np.sum(pad_left + pad_right) == 0 else (
             tuple((l, r) for l, r in zip(pad_left, pad_right)))
         return raw_s, vox_s, pad
+
+    def unpadded_slice(
+            self,
+            idx
+    ):
+        return self._idx_to_slice(idx)[1]
