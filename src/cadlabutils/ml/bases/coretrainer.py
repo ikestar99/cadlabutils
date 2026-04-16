@@ -298,10 +298,11 @@ class CoreTrainer(ABC):
         """
         del self.model, self.criterion, self.optimizer, self.scheduler
         torch.cuda.empty_cache()
-        self._plot()
         for f in self.ckpt_path.parent.glob(f"{self.ckpt_path.name}*"):
             f.unlink()
 
+        if self.pull_stats() is not None:
+            self._plot()
         if self._RAM is not None:
             self.p_bar.remove_task(self._RAM)
         if self._GPU is not None:
