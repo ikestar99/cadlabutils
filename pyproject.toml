@@ -25,7 +25,8 @@ dependencies = [
 [project.optional-dependencies]
 arrays = [
   "pystackreg",
-  "scikit-image"
+  "scikit-image",
+  "pyimagej"
 ]
 
 files = [

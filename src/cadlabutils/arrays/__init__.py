@@ -22,6 +22,10 @@ try:
     from .align import *
 except ImportError:
     ERRORS.append("align")
+try:
+    from .fiji import *
+except ImportError:
+    ERRORS.append("fiji")
 
 if len(ERRORS) > 0:
     warnings.warn(f"cadlabutils.arrays: {', '.join(ERRORS)} not available")
