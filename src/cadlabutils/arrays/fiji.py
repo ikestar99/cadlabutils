@@ -15,7 +15,7 @@ import imagej
 
 _MACROS = {
     f.stem: f for f in
-    Path(__file__).parents[3].joinpath("external_macros").glob("*.ijm")}
+    Path(__file__).parent.joinpath("external_macros").glob("*.ijm")}
 _FIJI = None
 
 
