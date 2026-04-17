@@ -18,6 +18,23 @@ _MACROS = {
     Path(__file__).parent.joinpath("external_macros").glob("*.ijm")}
 _FIJI = None
 
+ROLLING_BALL = """
+#@ String inputPath
+#@ String outputPath
+#@ int radius
+#@ String background
+
+setBatchMode(true)
+open(inputPath)
+origTitle = getTitle()
+origType = bitDepth()
+run("32-bit")
+run("Subtract Background...", "rolling=" + radius + " " + background + " create")
+bgTitle = getTitle()
+saveAs("Tiff", outputPath)
+close()
+close(origTitle)
+"""
 
 def _get_fiji(
         ij_path: Path
@@ -39,7 +56,6 @@ def rolling_ball_background(
         background: str = "light",
         ij_path: Path = None
 ):
-    _get_fiji(ij_path).py.run_macro(
-        _MACROS["fiji_rolling_ball"].read_text(), {
-            "inputPath": tif_path, "outputPath": out_path, "radius": radius,
-            "background": background})
+    _get_fiji(ij_path).py.run_macro(ROLLING_BALL, {
+        "inputPath": tif_path, "outputPath": out_path, "radius": radius,
+        "background": background})
