@@ -446,8 +446,8 @@ class CoreTrainer(ABC):
             None if no such statistics are available.
         """
         stats = None
-        if self.my_dir.is_file():
-            stats = pd.read_csv(self.my_dir)
+        if self.my_csv.is_file():
+            stats = pd.read_csv(self.my_csv)
             stats = stats if cols is None else stats[cols]
             stats = None if stats.empty else stats
 
