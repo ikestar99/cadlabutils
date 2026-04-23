@@ -527,6 +527,7 @@ class CoreTrainer(ABC):
         local_loss, local_acc = float("inf"), float("-inf")
         stats = self.pull_stats()
         if stats is not None:
+            print(stats.to_string())
             self.batch_size = int(stats.iloc[0, 6])
             stats = stats.query(f"{self.COLS[8]} == 'valid'")
             globe_loss, globe_acc = (
