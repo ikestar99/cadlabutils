@@ -18,6 +18,7 @@ import optuna
 import pandas as pd
 import seaborn as sns
 import torch
+import torch.utils.data as tud
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -109,7 +110,7 @@ class CoreTrainer(ABC):
     _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
     COLS = [
         "trainer", "model", "name", "fold", "curve", "n", "b_s", "epoch",
-        "mode", "t_sample", "loss", "acc"]
+        "subset", "mode", "t_sample", "loss", "acc"]
 
     def __init__(
             self,
@@ -118,9 +119,10 @@ class CoreTrainer(ABC):
             out_dir: Path,
             name: str,
             criterion: type = nn.CrossEntropyLoss,
-            optimizer: type = torch.optim.Adam,
+            optimizer: type = torch.optim.AdamW,
             scheduler: type = torch.optim.lr_scheduler.ReduceLROnPlateau,
             gpu: int = 0,
+            batch_size: int = None,
             dtypes: tuple[torch.dtype] = (torch.float32, torch.int64),
             criterion_kwargs: dict = None,
             optimizer_kwargs: dict = None,
@@ -138,7 +140,8 @@ class CoreTrainer(ABC):
         self.ckpt_path = self.my_dir.joinpath("ckpt")
         self.peak_path = self.my_dir.joinpath("peak")
         self.stat_csv = out_dir.joinpath("coretrainer_stats.csv")
-        self.batch_size = None
+        self.my_csv = self.my_dir.joinpath("coretrainer_stats.csv")
+        self.batch_size = batch_size
         self.p_bar = pbar
         self.names = [self.__class__.__name__, model.__name__, name]
         self.coords = [0, 0]
@@ -201,6 +204,7 @@ class CoreTrainer(ABC):
     def _epoch_reset(
             self,
             epoch: int,
+            subset: int,
             train: bool
     ):
         """Reset instance state after completing an epoch.
@@ -209,6 +213,8 @@ class CoreTrainer(ABC):
         ----------
         epoch : int
             Current epoch number.
+        subset : int
+            Current subset number. 0 if not subsetting the training dataset.
         train : bool
             If True, training epoch. If False, validation epoch.
 
@@ -225,8 +231,9 @@ class CoreTrainer(ABC):
     ):
         """Generate graphs at the end of training."""
         stats = self.pull_stats()[
-            ["fold", "curve", "epoch", "mode", "loss", "acc"]]
+            ["fold", "curve", "epoch", "subset", "mode", "loss", "acc"]]
         unique = sorted(stats["mode"].unique().tolist())
+        stats["epoch"] += stats["subset"] / (stats["subset"].max() + 1)
 
         # plot loss and accuracy per curve over epochs, aggregate across folds
         fig, axes = plt.subplots(
@@ -237,9 +244,7 @@ class CoreTrainer(ABC):
                 style="curve", errorbar=("se", 2), legend=i == 0,
                 hue_order=unique, palette=dict(zip(
                     unique, sns.color_palette("rocket", len(unique)))))
-            cdu.style_ax(
-                axes[i], x_label="epoch", y_label=y,
-                y_ticks=None if i == 0 else (0, 0.5, 1))
+            cdu.style_ax(axes[i], x_label="epoch", y_label=y)
             if i == 0:
                 axes[0].legend(
                     frameon=False, prop={"size": 14, "weight": "bold"},
@@ -368,7 +373,8 @@ class CoreTrainer(ABC):
             self,
             loader: torch.utils.data.DataLoader,
             train: bool,
-            epoch: int
+            epoch: int,
+            subset: int
     ):
         """Complete a full iteration through dataset with model.
 
@@ -381,6 +387,8 @@ class CoreTrainer(ABC):
             validation.
         epoch : int
             Current epoch number.
+        subset : int
+            Current subset number.
 
         Returns
         -------
@@ -406,14 +414,15 @@ class CoreTrainer(ABC):
 
         # compute statistics and clean up after epoch
         agg_time = (time.time() - t_0) / len(loader)
-        self._epoch_reset(epoch, train=train)
+        self._epoch_reset(epoch, subset, train=train)
 
         # save data
         mode = "train" if train else "valid"
-        data = [len(loader.dataset), self.batch_size, epoch, mode, agg_time]
-        data += np.mean(np.array(r_stats), axis=0).tolist()
-        stats = pd.DataFrame(
-            [self.names + self.coords + data], columns=self.COLS, index=[0])
+        data = self.names + self.coords + [
+            len(loader.dataset), self.batch_size, epoch, subset, mode,
+            agg_time] + np.mean(np.array(r_stats), axis=0).tolist()
+        stats = pd.DataFrame([data], columns=self.COLS, index=[0])
+        cdu_f.csvs.append_data(file=self.my_csv, data=stats, index=False)
         cdu_f.csvs.append_data(file=self.stat_csv, data=stats, index=False)
         return data[-2], data[-1]
 
@@ -437,9 +446,8 @@ class CoreTrainer(ABC):
             None if no such statistics are available.
         """
         stats = None
-        if self.stat_csv.is_file():
-            stats = pd.read_csv(self.stat_csv).query(" and ".join([
-                f"{c} == '{n}'" for c, n in zip(self.COLS[:3], self.names)]))
+        if self.my_dir.is_file():
+            stats = pd.read_csv(self.my_dir)
             stats = stats if cols is None else stats[cols]
             stats = None if stats.empty else stats
 
@@ -450,11 +458,13 @@ class CoreTrainer(ABC):
         train_dataset: torch.utils.data.Dataset,
         valid_dataset: torch.utils.data.Dataset,
         epochs: int,
+        subepochs: int = 1,
         fold: int = 0,
         curve: int = 0,
+        stop_count: int = None,
+        safe_count: int = 0,
         task_id: cdu.rp.TaskID = None,
         min_iter: int = 100,
-        use_acc: bool = True,
         save_best: bool = True,
         trial: optuna.Trial = None
     ):
@@ -467,9 +477,12 @@ class CoreTrainer(ABC):
         valid_dataset : torch.utils.data.Dataset
             Annotated dataset on which to validate model after each epoch.
         epochs : int
-            Maximum number of training epochs during training. Each epoch
-            involves a complete iteration through training and validation
-            datasets.
+            Maximum number of complete iterations through training and
+            validation datasets.
+        subepochs : int, optional
+            If greater than 1, `train_dataset` will be randomly partitioned
+            into this many subsets with a full validation run after each
+            subset. Effective epoch count is `epochs` * `sub_epochs`.
         fold : int, optional
             Current k-fold fold.
             Defaults to 0.
@@ -479,16 +492,20 @@ class CoreTrainer(ABC):
 
         Other Parameters
         ----------------
+        stop_count : int, optional
+            Number of `sub_epochs` after which to stop training should
+            validation loss fail to improve.
+            Defaults to None, in which case no stopping criterion is used.
+        safe_count : int, optional
+            Number of `sub_epochs` guaranteed to complete before implementing
+            early stopping logic specified by `stop_count`.
+            Defaults to 0.
         task_id : cdu.rp.TaskID, optional
             Index of epoch progress bar in instance attribute `pbar`.
             Defaults to None.
         min_iter : int, optional
             Minimum allowed iterations in an epoch. Useful if optimum batch
             size is much larger than dataset size.
-        use_acc : bool, optional
-            If True, consider increasing accuracy in addition to decreasing
-            loss when saving model.
-            Defaults to True.
         save_best : bool, optional
             If True, save best model as dedicated file.
             Defaults to True.
@@ -501,7 +518,7 @@ class CoreTrainer(ABC):
         that returns an iterable with at least two indices. The first index is
         used as input data while the second index serves as the target.
         """
-        self.coords, epoch = [fold, curve], 0
+        self.coords, epoch, subset = [fold, curve], 0, 0
         globe_loss, globe_acc = float("inf"), float("-inf")
         local_loss, local_acc = float("inf"), float("-inf")
         stats = self.pull_stats()
@@ -520,6 +537,7 @@ class CoreTrainer(ABC):
             stats = stats.query(f"{self.COLS[4]} == @curve")
             if not stats.empty:
                 epoch = stats[self.COLS[7]].max() + 1
+                subset = stats[self.COLS[8]].max() + 1
                 if epoch >= epochs:
                     return
 
@@ -541,49 +559,78 @@ class CoreTrainer(ABC):
             utils.load(
                 self.ckpt_path, self.model, device=self.device, load_dict={
                     self._O: self.optimizer, self._S: self.scheduler})
-            print(f"resumed fold {fold} curve {curve} epoch {epoch}")
+            print(f"resumed f_{fold} c_{curve} e_{epoch} s_{subset}")
 
         # prepare datasets
-        train_loader = utils.get_dataloader(train_dataset, self.batch_size)
         valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
-        label = f"{len(train_loader)} x {self.batch_size}"
-        self.p_bar.update(task_id, label=label, completed=epoch, start=True)
+        label = f"{len(train_dataset) // self.batch_size} x {self.batch_size}"
+        self.p_bar.update(
+            task_id, label=label, completed=(epoch * subepochs) + subset,
+            total=epochs * subepochs, start=True)
 
         # loop over full dataset per epoch
+        bad = 0
         for e in range(epoch, epochs):
-            t_loss, t_acc = self._epoch(train_loader, train=True, epoch=e)
-            v_loss, v_acc = self._epoch(valid_loader, train=False, epoch=e)
+            sub_epoch_indices = np.array_split(
+                np.random.default_rng(42 + e).permutation(len(train_dataset)),
+                subepochs) if subepochs > 1 else None
+            for s in range(subepochs):
+                if e == epoch and s < subset:
+                    continue
 
-            # modify learning rate based on validation loss, save checkpoint
-            self.scheduler.step(v_loss)
-            utils.save(self.ckpt_path, self.model, save_dict={
-                self._O: self.optimizer, self._S: self.scheduler})
+                sub_dset = train_dataset if subepochs <= 1 else tud.Subset(
+                    train_dataset, sub_epoch_indices[s])
+                t_loss, t_acc = self._epoch(
+                    utils.get_dataloader(sub_dset, self.batch_size),
+                    train=True, epoch=e, subset=s)
+                v_loss, v_acc = self._epoch(
+                    valid_loader, train=False, epoch=e, subset=s)
 
-            # save model if peak validation performance
-            local_check = utils.is_better(
-                (v_loss, local_loss), (v_acc, local_acc) if use_acc else None)
-            globe_check = utils.is_better(
-                (v_loss, globe_loss), (v_acc, globe_acc) if use_acc else None)
-            if save_best and local_check:
-                local_loss, local_acc = v_loss, v_acc
-                utils.save(self.my_dir.joinpath(f"fold {fold}"), self.model)
-                if globe_check:
+                # modify learning rate based on validation loss, save
+                self.scheduler.step()  # v_loss)
+                utils.save(self.ckpt_path, self.model, save_dict={
+                    self._O: self.optimizer, self._S: self.scheduler})
+
+                # check for improvement on prior performance
+                local_check = utils.is_better(
+                    (v_loss, local_loss), (v_acc, local_acc))
+                globe_check = utils.is_better(
+                    (v_loss, globe_loss), (v_acc, globe_acc))
+
+                # save models with peak local/global performance
+                if save_best and local_check:
+                    local_loss, local_acc = v_loss, v_acc
+                    utils.save(self.my_dir.joinpath(f"fold {fold}"), self.model)
+                if save_best and globe_check:
                     globe_loss, globe_acc = v_loss, v_acc
                     utils.save(self.peak_path, self.model)
                     print(f"{self.coords + [e]}: l{v_loss:.2e} a{v_acc:.2%}")
+                if local_check or globe_check:
+                    bad = 0
 
-            self.p_bar.update(task_id, completed=e + 1)
+                self.p_bar.update(task_id, completed=(e * subepochs) + s + 1)
 
-            # optional optuna hyperparameter optimization
-            if trial is not None:
-                trial.report(v_acc if use_acc else v_loss, step=e)
-                if trial.should_prune():
-                    del train_loader, valid_loader
-                    self._clean_up(task_id)
-                    raise optuna.TrialPruned()
+                # early stopping logic
+                if trial is not None:  # in optuna
+                    trial.report(v_loss, step=(e * subepochs) + s)
+                    if trial.should_prune():
+                        del sub_dset, valid_loader
+                        self._clean_up(task_id)
+                        raise optuna.TrialPruned()
+                elif stop_count is None:  # no early stopping
+                    continue
+                elif not local_check and utils.is_better((local_loss, v_loss)):
+                    bad += 1
+                    if (e * subepochs) + s > safe_count and bad >= stop_count:
+                        print(
+                            f"f_{fold} c_{curve} reached {stop_count} stagnant"
+                            f" updates at e_{epoch} s_{subset}")
+                        del sub_dset, valid_loader
+                        self._clean_up(task_id)
+                        return
 
         # remove within-loop values from memory
-        del train_loader, valid_loader
+        del sub_dset, valid_loader
         self._clean_up(task_id)
 
     def evaluate(

@@ -216,11 +216,8 @@ class TreeBar(rp.Progress):
         template += "[{task.fields[color]}]{task.fields[label]}"
         super(TreeBar, self).__init__(  # label
             rp.TextColumn(template, justify="left"),
-            rp.BarColumn(bar_width=None),  # progress bar
-            rp.MofNCompleteColumn(),  # shows X/Y
-            TimeSpeedColumn(),
-            # rp.TimeElapsedColumn(),  # total elapsed time
-            **kwargs)
+            rp.BarColumn(bar_width=None), rp.MofNCompleteColumn(),
+            rp.TimeElapsedColumn(),  rp.TimeRemainingColumn(), **kwargs)
         self._ids, self._tabs = [], []
 
     def _update_tree(

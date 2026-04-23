@@ -27,12 +27,10 @@ class ClassificationTrainer(CoreTrainer):
         Accumulates within epoch hard (discrete) confusion matrices.
     zarr (zarr.Array):
         Stores confusion matrices in `soft` and `hard` after each epoch. Has
-        shape (n_folds, n_curve_steps, n_epochs, 2, 2, `n_class`, `n_class`),
+        shape (folds, curves, epochs, subsets, 2, 2, `n_class`, `n_class`),
         where...
-        -   4th dimension corresponds to training (idx 0) and validation
-            (idx 1) phases
-        -   5th dimension corresponds to soft (idx 0) and
-            hard (idx 1) confusion matrices.
+        -   axis -4 corresponds to [training, validation]
+        -   axis -3 corresponds to [soft, hard] confusion matrices
 
     Parameters
     ----------
@@ -60,7 +58,7 @@ class ClassificationTrainer(CoreTrainer):
         self.hard = torch.zeros(
             (n_class, n_class), dtype=self.dtypes[0], device=self.device,
             requires_grad=False)
-        shape = (1, 1, 1, 2, 2, n_class, n_class)
+        shape = (1, 1, 1, 1, 2, 2, n_class, n_class)
         self.zarr = cdu_f.zarrs.make_zarr(
             self.my_dir.joinpath("confusion_matrices.zarr"), shape=shape,
             chunk=shape, mode="a", dtype=float)
@@ -92,6 +90,7 @@ class ClassificationTrainer(CoreTrainer):
     def _epoch_reset(
             self,
             epoch: int,
+            subset: int,
             train: bool
     ):
         """Reset instance state after completing an epoch.
@@ -111,11 +110,11 @@ class ClassificationTrainer(CoreTrainer):
 
         # update zarr file to appropriate dimensionality
         new_shape = np.array(self.zarr.shape)
-        new_shape[:3] = np.maximum(
-            new_shape[:3], np.array(self.coords + [epoch]) + 1)
+        new_shape[:4] = np.maximum(
+            new_shape[:4], np.array(self.coords + [epoch, subset]) + 1)
         self.zarr.resize(new_shape)
 
         # save confusion matrices and reset epoch holder values
-        self.zarr[tuple(self.coords + [epoch, int(not train)])] = stats
+        self.zarr[tuple(self.coords + [epoch, subset, int(not train)])] = stats
         self.soft.zero_()
         self.hard.zero_()
