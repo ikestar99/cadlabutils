@@ -530,8 +530,10 @@ class CoreTrainer(ABC):
             print(stats.to_string())
             self.batch_size = int(stats.iloc[0, 6])
             stats = stats.query(f"{self.COLS[8]} == 'valid'")
+            print(stats.to_string())
             globe_loss, globe_acc = (
                 stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
+            print(globe_loss, globe_acc)
             print(f"global: l{globe_loss:.2e} a{globe_acc:.2%}")
             stats = stats.query(f"{self.COLS[3]} == @fold")
             if not stats.empty:
