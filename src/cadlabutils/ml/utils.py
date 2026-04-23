@@ -184,51 +184,6 @@ def get_device_names(
     return device_info
 
 
-def get_dataloader(
-        dataset: Dataset,
-        batch_size: int,
-        shuffle: bool = True,
-        workers: int = 4,
-        drop_last: bool = False,
-        **kwargs
-):
-    """Create a DataLoader from a Dataset.
-
-    Parameters
-    ----------
-    dataset : Dataset
-        Dataset to wrap in a DataLoader.
-    batch_size : int
-        Number of samples per batch.
-    shuffle : bool
-        If True, shuffle dataset indices before forming batches.
-        Defaults to True.
-    workers : int, optional
-        Number of parallel workers.
-        Defaults to 4.
-    drop_last : bool, optional
-        If True and `batch_size` is 1, drop final batch if number of samples
-        is less than `batch_size`.
-        Defaults to True.
-
-    Returns
-    -------
-    loader : DataLoader
-        Instantiated DataLoader.
-
-    Notes
-    -----
-    If `dataset` is not divisible into equal batches of `batch_size` samples,
-    The final undersized batch will be discarded iff `drop_last` is True and
-    `dataset` has at least one full batch.
-    """
-    loader = DataLoader(
-        dataset, batch_size=batch_size, shuffle=shuffle, num_workers=workers,
-        pin_memory=True, persistent_workers=True,
-        drop_last=(len(dataset) // batch_size) > 0 and drop_last, **kwargs)
-    return loader
-
-
 def save(
         file: Path,
         model: nn.Module,

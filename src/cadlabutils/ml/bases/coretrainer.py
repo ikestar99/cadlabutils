@@ -18,7 +18,7 @@ import optuna
 import pandas as pd
 import seaborn as sns
 import torch
-import torch.utils.data as tud
+from torch.utils.data import Dataset, DataLoader, Subset
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -371,7 +371,7 @@ class CoreTrainer(ABC):
 
     def _epoch(
             self,
-            loader: torch.utils.data.DataLoader,
+            loader: DataLoader,
             train: bool,
             epoch: int,
             subset: int
@@ -455,8 +455,8 @@ class CoreTrainer(ABC):
 
     def train(
         self,
-        train_dataset: torch.utils.data.Dataset,
-        valid_dataset: torch.utils.data.Dataset,
+        train_dataset: Dataset,
+        valid_dataset: Dataset,
         epochs: int,
         subepochs: int = 1,
         fold: int = 0,
@@ -466,7 +466,8 @@ class CoreTrainer(ABC):
         task_id: cdu.rp.TaskID = None,
         min_iter: int = 100,
         save_best: bool = True,
-        trial: optuna.Trial = None
+        trial: optuna.Trial = None,
+        workers: int = 12
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
@@ -511,6 +512,9 @@ class CoreTrainer(ABC):
             Defaults to True.
         trial : optuna.Trial, optional
             Optuna trial object used for hyperparameter optimization.
+        workers: int, optional
+            Number of parallel workers used to prepare batches.
+            Defaults to 12.
 
         Notes
         -----
@@ -561,8 +565,13 @@ class CoreTrainer(ABC):
                     self._O: self.optimizer, self._S: self.scheduler})
             print(f"resumed f_{fold} c_{curve} e_{epoch} s_{subset}")
 
-        # prepare datasets
-        valid_loader = utils.get_dataloader(valid_dataset, self.batch_size)
+        # prepare training and validation loaders
+        train_loader = None if subepochs > 1 else DataLoader(
+            train_dataset, batch_size=self.batch_size, num_workers=workers,
+            shuffle=True, pin_memory=True, persistent_workers=True)
+        valid_loader = DataLoader(
+            valid_dataset, batch_size=self.batch_size, num_workers=workers,
+            pin_memory=True, persistent_workers=True)
         label = f"{len(train_dataset) // self.batch_size} x {self.batch_size}"
         self.p_bar.update(
             task_id, label=label, completed=(epoch * subepochs) + subset,
@@ -571,6 +580,7 @@ class CoreTrainer(ABC):
         # loop over full dataset per epoch
         bad = 0
         for e in range(epoch, epochs):
+            # prepare to subsample training data into sub epochs if applicable
             sub_epoch_indices = np.array_split(
                 np.random.default_rng(42 + e).permutation(len(train_dataset)),
                 subepochs) if subepochs > 1 else None
@@ -578,11 +588,15 @@ class CoreTrainer(ABC):
                 if e == epoch and s < subset:
                     continue
 
-                sub_dset = train_dataset if subepochs <= 1 else tud.Subset(
-                    train_dataset, sub_epoch_indices[s])
+                # subsample training data
+                _loader = train_loader if subepochs <= 1 else DataLoader(
+                    Subset(train_dataset, sub_epoch_indices[s]),
+                    batch_size=self.batch_size, num_workers=workers,
+                    shuffle=True, pin_memory=True)
+
+                # training and validation (sub) epochs
                 t_loss, t_acc = self._epoch(
-                    utils.get_dataloader(sub_dset, self.batch_size),
-                    train=True, epoch=e, subset=s)
+                    _loader, train=True, epoch=e, subset=s)
                 v_loss, v_acc = self._epoch(
                     valid_loader, train=False, epoch=e, subset=s)
 
@@ -614,7 +628,7 @@ class CoreTrainer(ABC):
                 if trial is not None:  # in optuna
                     trial.report(v_loss, step=(e * subepochs) + s)
                     if trial.should_prune():
-                        del sub_dset, valid_loader
+                        del train_loader, _loader, valid_loader
                         self._clean_up(task_id)
                         raise optuna.TrialPruned()
                 elif stop_count is None:  # no early stopping
@@ -625,12 +639,12 @@ class CoreTrainer(ABC):
                         print(
                             f"f_{fold} c_{curve} reached {stop_count} stagnant"
                             f" updates at e_{epoch} s_{subset}")
-                        del sub_dset, valid_loader
+                        del train_loader, _loader, valid_loader
                         self._clean_up(task_id)
                         return
 
         # remove within-loop values from memory
-        del sub_dset, valid_loader
+        del train_loader, _loader, valid_loader
         self._clean_up(task_id)
 
     def evaluate(
@@ -639,7 +653,8 @@ class CoreTrainer(ABC):
             task_id: cdu.rp.TaskID = None,
             in_idx: int | str = slice(None),
             logits: bool = True,
-            fold: int = None
+            fold: int = None,
+            workers: int = 12
     ):
         """Inference on unlabeled data with trained model.
 
@@ -667,6 +682,14 @@ class CoreTrainer(ABC):
         logits : bool, optional
             If True, values in `output` are interpreted as raw logits.
             Defaults to True.
+        fold : int, optional
+            If provided, use the weights from best model within this fold for
+            inference.
+            Defaults to None, in which case will load weights from the best
+            model across all folds.
+        workers: int, optional
+            Number of parallel workers used to prepare batches.
+            Defaults to 12.
 
         Notes
         -----
@@ -684,8 +707,9 @@ class CoreTrainer(ABC):
         utils.load(model_path, self.model, device=self.device)
         utils.set_mode(
             self.model, train=False, device=self.device, dtype=self.dtypes[0])
-        eval_loader = utils.get_dataloader(
-            eval_dataset, batch_size=self.batch_size, shuffle=False)
+        eval_loader = DataLoader(
+            eval_dataset, batch_size=self.batch_size, num_workers=workers,
+            pin_memory=True)
         self.p_bar.update(task_id, total=len(eval_dataset), start=True)
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
