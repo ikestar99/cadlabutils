@@ -638,7 +638,7 @@ class CoreTrainer(ABC):
                     if (e * subepochs) + s > safe_count and bad >= stop_count:
                         print(
                             f"f_{fold} c_{curve} reached {stop_count} stagnant"
-                            f" updates at e_{epoch} s_{subset}")
+                            f" updates at e_{e} s_{s}")
                         del train_loader, _loader, valid_loader
                         self._clean_up(task_id)
                         return
