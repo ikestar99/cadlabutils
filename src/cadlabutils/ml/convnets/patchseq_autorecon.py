@@ -323,7 +323,7 @@ class _OutputModule(nn.Module):
         return [getattr(self, layer)(x) for layer in self.output_layers]
 
 
-class _RSUNetMulti(nn.Module):
+class RSUNetMulti(nn.Module):
     """
     Full model for multiclass segmentation. Trained with 4 output channels:
         -   Ch0 = background
@@ -341,7 +341,7 @@ class _RSUNetMulti(nn.Module):
             io_stride: tuple = IO_STRIDE,
             bn: bool = BN
     ):
-        super(_RSUNetMulti, self).__init__()
+        super(RSUNetMulti, self).__init__()
         output_spec = (
             OrderedDict(label=4) if output_spec is None else output_spec)
 
@@ -439,7 +439,7 @@ class _RSUNetMulti(nn.Module):
         return self.outputdeconv(self.embedconv(x))[0]
 
 
-class Monkey2DRSUNetMulti(_RSUNetMulti):
+class Monkey2DRSUNetMulti(RSUNetMulti):
     def __init__(
             self
     ):
@@ -456,7 +456,7 @@ class Monkey2DRSUNetMulti(_RSUNetMulti):
         return x
 
 
-class Monkey3DRSUNetMulti(_RSUNetMulti):
+class Monkey3DRSUNetMulti(RSUNetMulti):
     def __init__(
             self
     ):
@@ -470,20 +470,4 @@ class Monkey3DRSUNetMulti(_RSUNetMulti):
         x = super().forward(x)
         x = x[:, :, *tuple([s // 2 for s in x.size()[2:]])]
         x = x[:, [0, 2, 3]]  # background, axon, dendrite -- drop soma logit
-        return x
-
-
-class RSUNetMulti(_RSUNetMulti):
-    """Patched to output [background, foreground] channels"""
-    def __init__(
-            self
-    ):
-        super(RSUNetMulti, self).__init__()
-
-    def forward(
-            self,
-            x: torch.tensor
-    ):
-        x = super().forward(x)
-        x = torch.stack([x[:, 0], torch.logsumexp(x[:, 1:], dim=1)], dim=1)
         return x

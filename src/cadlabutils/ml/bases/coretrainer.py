@@ -454,20 +454,20 @@ class CoreTrainer(ABC):
         return stats
 
     def train(
-        self,
-        train_dataset: Dataset,
-        valid_dataset: Dataset,
-        epochs: int,
-        subepochs: int = 1,
-        fold: int = 0,
-        curve: int = 0,
-        stop_count: int = None,
-        safe_count: int = 0,
-        task_id: cdu.rp.TaskID = None,
-        min_iter: int = 100,
-        save_best: bool = True,
-        trial: optuna.Trial = None,
-        workers: int = 12
+            self,
+            train_dataset: Dataset,
+            valid_dataset: Dataset,
+            epochs: int,
+            subepochs: int = 1,
+            fold: int = 0,
+            curve: int = 0,
+            stop_count: int = None,
+            safe_count: int = 0,
+            task_id: cdu.rp.TaskID = None,
+            min_iter: int = 100,
+            save_best: bool = True,
+            trial: optuna.Trial = None,
+            workers: int = 12
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
 
