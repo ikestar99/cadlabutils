@@ -10,6 +10,7 @@ Created on Wed Jan 22 09:00:00 2025
 from abc import ABC, abstractmethod
 import time
 from pathlib import Path
+import shutil
 
 # 2. Third-party library imports
 import matplotlib.pyplot as plt
@@ -18,7 +19,7 @@ import optuna
 import pandas as pd
 import seaborn as sns
 import torch
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -250,9 +251,7 @@ class CoreTrainer(ABC):
                     frameon=False, prop={"size": 14, "weight": "bold"},
                     loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=2)
 
-        plt.savefig(
-            self.my_dir.joinpath(f"training.png"), dpi=300,
-            bbox_inches="tight")
+        plt.savefig(self.my_dir / "training.png", dpi=300, bbox_inches="tight")
         plt.close(fig)
 
     def _track_memory(
@@ -465,7 +464,6 @@ class CoreTrainer(ABC):
             safe_count: int = 0,
             task_id: cdu.rp.TaskID = None,
             min_iter: int = 100,
-            save_best: bool = True,
             trial: optuna.Trial = None,
             workers: int = 12
     ):
@@ -507,11 +505,10 @@ class CoreTrainer(ABC):
         min_iter : int, optional
             Minimum allowed iterations in an epoch. Useful if optimum batch
             size is much larger than dataset size.
-        save_best : bool, optional
-            If True, save best model as dedicated file.
-            Defaults to True.
         trial : optuna.Trial, optional
-            Optuna trial object used for hyperparameter optimization.
+            Optuna trial object used for hyperparameter optimization. If used,
+            model weights and checkpoints will be cleared after each trial.
+            Defaults to None.
         workers: int, optional
             Number of parallel workers used to prepare batches.
             Defaults to 12.
@@ -522,28 +519,24 @@ class CoreTrainer(ABC):
         that returns an iterable with at least two indices. The first index is
         used as input data while the second index serves as the target.
         """
-        self.coords, epoch, subset = [fold, curve], 0, 0
-        globe_loss, globe_acc = float("inf"), float("-inf")
-        local_loss, local_acc = float("inf"), float("-inf")
+        self.coords, _done = [fold, curve], 0
+        _G, _L = (float("inf"), float("-inf")), (float("inf"), float("-inf"))
         stats = self.pull_stats()
         if stats is not None:
-            self.batch_size = int(stats.iloc[0, 6])
-            stats = stats.query(f"{self.COLS[-4]} == 'valid'")
-            globe_loss, globe_acc = (
-                stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
-            print(f"global: l{globe_loss:.2e} a{globe_acc:.2%}")
-            stats = stats.query(f"{self.COLS[3]} == @fold")
-            if not stats.empty:
-                local_loss, local_acc = (
-                    stats[self.COLS[-2]].min(), stats[self.COLS[-1]].max())
-                print(f"local: l{local_loss:.2e} a{local_acc:.2%}")
+            self.batch_size = int(stats["b_s"].max())
 
-            stats = stats.query(f"{self.COLS[4]} == @curve")
-            if not stats.empty:
-                epoch = stats[self.COLS[7]].max() + 1
-                subset = stats[self.COLS[8]].max() + 1
-                if epoch >= epochs:
-                    return
+            # pull global and local peak performance metrics
+            stats = stats.query("mode == 'valid'")
+            _G = (stats["loss"].min(), stats["acc"].max())
+            stats = stats.query("fold == @fold")
+            _L = _L if stats.empty else (
+                stats["loss"].min(), stats["acc"].max())
+
+            # count completed validation subsets
+            _done = stats.query("curve == @curve")[
+                ["epoch", "subset"]].drop_duplicates(keep="first").shape[0]
+            if _done >= epochs * subepochs:
+                return
 
         self._initialize()
         self._track_memory()
@@ -551,101 +544,97 @@ class CoreTrainer(ABC):
         # simulate optimum batch size
         if self.batch_size is None:
             pair = train_dataset[0]
-            self.batch_size = metrics.simulate_batch_size(
+            batch_size = metrics.simulate_batch_size(
                 self.model, sample=pair[0], device=self.device, target=pair[1],
                 criterion=self.criterion, optimizer=self.optimizer,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            self.batch_size = min(
-                self.batch_size, len(train_dataset) // min_iter)
+            batch_size = min(batch_size, len(train_dataset) // min_iter)
+            self.batch_size = max(batch_size, 1)
 
         # load model-specific checkpoint if available
-        if epoch > 0:
+        if _done > 0:
             utils.load(
-                self.ckpt_path, self.model, device=self.device, load_dict={
-                    self._O: self.optimizer, self._S: self.scheduler})
-            print(f"resumed f_{fold} c_{curve} e_{epoch} s_{subset}")
+                self.ckpt_path, self.model, device=self.device,
+                load_dict={self._O: self.optimizer, self._S: self.scheduler})
+            print(
+                f"resumed f_{fold} c_{curve} at subset index {_done}",
+                f"\n\tglobal: l{_G[0]:.2e} a{_G[1]:.2%}",
+                f"\n\tlocal: l{_L[0]:.2e} a{_L[1]:.2%}")
 
-        # prepare training and validation loaders
-        train_loader = None if subepochs > 1 else DataLoader(
-            train_dataset, batch_size=self.batch_size, num_workers=workers,
-            shuffle=True, pin_memory=True, persistent_workers=True)
+        # prepare validation loader
         valid_loader = DataLoader(
             valid_dataset, batch_size=self.batch_size, num_workers=workers,
-            pin_memory=True, persistent_workers=True)
-        label = f"{len(train_dataset) // self.batch_size} x {self.batch_size}"
+            pin_memory=True, persistent_workers=workers > 0)
         self.p_bar.update(
-            task_id, label=label, completed=(epoch * subepochs) + subset,
-            total=epochs * subepochs, start=True)
+            task_id, label=f"{len(train_dataset) // self.batch_size} batches",
+            completed=_done, total=epochs * subepochs, start=True)
 
         # loop over full dataset per epoch
-        bad = 0
-        for e in range(epoch, epochs):
+        _loader, bad_count, _sub = None, 0, subepochs > 1
+        for e in range(epochs):
             # prepare to subsample training data into sub epochs if applicable
-            sub_epoch_indices = np.array_split(
+            _indices = np.array_split(
                 np.random.default_rng(42 + e).permutation(len(train_dataset)),
-                subepochs) if subepochs > 1 else None
+                subepochs) if _sub else None
+            epoch_loss = []
             for s in range(subepochs):
-                if e == epoch and s < subset:
+                _idx = (e * subepochs) + s
+                if _idx < _done:
                     continue
 
                 # subsample training data
-                _loader = train_loader if subepochs <= 1 else DataLoader(
-                    Subset(train_dataset, sub_epoch_indices[s]),
-                    batch_size=self.batch_size, num_workers=workers,
-                    shuffle=True, pin_memory=True)
+                _check = (_loader is not None) and (not _sub)
+                _loader = _loader if _check else DataLoader(
+                    train_dataset, batch_size=self.batch_size,
+                    shuffle=not _sub, num_workers=workers, pin_memory=True,
+                    sampler=SubsetRandomSampler(_indices[s]) if _sub else None,
+                    persistent_workers=_check and workers > 0)
 
                 # training and validation (sub) epochs
-                t_loss, t_acc = self._epoch(
-                    _loader, train=True, epoch=e, subset=s)
-                v_loss, v_acc = self._epoch(
-                    valid_loader, train=False, epoch=e, subset=s)
+                _ = self._epoch(_loader, train=True, epoch=e, subset=s)
+                v = self._epoch(valid_loader, train=False, epoch=e, subset=s)
+                epoch_loss.append(v[0])
 
-                # modify learning rate based on validation loss, save
-                self.scheduler.step()  # v_loss)
+                # modify learning rate based on validation loss, save, update
+                self.scheduler.step()  # v[0])
                 utils.save(self.ckpt_path, self.model, save_dict={
                     self._O: self.optimizer, self._S: self.scheduler})
-
-                # check for improvement on prior performance
-                local_check = utils.is_better(
-                    (v_loss, local_loss), (v_acc, local_acc))
-                globe_check = utils.is_better(
-                    (v_loss, globe_loss), (v_acc, globe_acc))
+                self.p_bar.update(task_id, completed=_idx + 1)
 
                 # save models with peak local/global performance
-                if save_best and local_check:
-                    local_loss, local_acc = v_loss, v_acc
-                    utils.save(self.my_dir.joinpath(f"fold {fold}"), self.model)
-                if save_best and globe_check:
-                    globe_loss, globe_acc = v_loss, v_acc
-                    utils.save(self.peak_path, self.model)
-                    print(f"{self.coords + [e]}: l{v_loss:.2e} a{v_acc:.2%}")
-                if local_check or globe_check:
-                    bad = 0
-
-                self.p_bar.update(task_id, completed=(e * subepochs) + s + 1)
-
-                # early stopping logic
-                if trial is not None:  # in optuna
-                    trial.report(v_loss, step=(e * subepochs) + s)
-                    if trial.should_prune():
-                        del train_loader, _loader, valid_loader
-                        self._clean_up(task_id)
-                        raise optuna.TrialPruned()
-                elif stop_count is None:  # no early stopping
+                if trial is not None:
                     continue
-                elif not local_check and utils.is_better((local_loss, v_loss)):
-                    bad += 1
-                    if (e * subepochs) + s > safe_count and bad >= stop_count:
-                        print(
-                            f"f_{fold} c_{curve} reached {stop_count} stagnant"
-                            f" updates at e_{e} s_{s}")
-                        del train_loader, _loader, valid_loader
+                elif utils.is_better((v[0], _L[0]), (v[1], _L[1])):
+                    _L, bad_count = v, 0
+                    utils.save(self.my_dir / f"fold {fold}", self.model)
+                    if utils.is_better((v[0], _G[0]), (v[1], _G[1])):
+                        _G = v
+                        utils.save(self.peak_path, self.model)
+                        print(self.coords, [e, s], f": {v[0]:.2e} {v[1]:.2%}")
+
+                # early stopping logic, increment count if local best is better
+                if stop_count is not None and utils.is_better((_L[0], v[0])):
+                    bad_count += 1
+                    if _idx > safe_count and bad_count >= stop_count:
+                        print(f"f_{fold} c_{curve} early stop at e_{e} s_{s}")
+                        del _loader, valid_loader
                         self._clean_up(task_id)
                         return
 
+            # early stopping with optuna
+            if trial is not None:
+                trial.report(np.median(epoch_loss), step=e)
+                if trial.should_prune():
+                    del _loader, valid_loader
+                    self._clean_up(task_id)
+                    shutil.rmtree(self.my_dir)
+                    raise optuna.TrialPruned()
+
         # remove within-loop values from memory
-        del train_loader, _loader, valid_loader
+        del _loader, valid_loader
         self._clean_up(task_id)
+        if trial is not None:
+            shutil.rmtree(self.my_dir)
 
     def evaluate(
             self,
@@ -697,27 +686,26 @@ class CoreTrainer(ABC):
         that returns an iterable with at least two indices. The first index is
         used as input data while the second index serves as the target.
         """
-        model_path = self.peak_path if fold is None else self.my_dir.joinpath(
-            f"fold {fold}")
         if self.batch_size is None:
             self.batch_size = int(self.pull_stats().iloc[-1, 6])
 
         self._initialize()
         self._track_memory()
-        utils.load(model_path, self.model, device=self.device)
+        utils.load(
+            self.peak_path if fold is None else self.my_dir / f"fold {fold}",
+            self.model, device=self.device)
         utils.set_mode(
             self.model, train=False, device=self.device, dtype=self.dtypes[0])
         eval_loader = DataLoader(
             eval_dataset, batch_size=self.batch_size, num_workers=workers,
             pin_memory=True)
-        self.p_bar.update(task_id, total=len(eval_dataset), start=True)
+        self.p_bar.update(task_id, total=len(eval_loader), start=True)
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
                 self.model, batch[in_idx], device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
             output = F.softmax(output, dim=1) if logits else output
-            self.p_bar.update(
-                task_id, completed=b * self.batch_size + output.size(0))
+            self.p_bar.update(task_id, completed=b)
             yield b * self.batch_size, output.detach().cpu().numpy()
 
         del eval_loader

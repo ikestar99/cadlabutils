@@ -11,9 +11,10 @@ from pathlib import Path
 
 # 2. Third-party library imports
 import optuna
+from optuna.trial import TrialState
 
 
-def load_best_hyperparams(
+def pull_trials(
         study_sqlite: Path,
         name: str,
         completed: bool = True
@@ -59,14 +60,12 @@ def resume_failed_trial(
         If True, re-enqueued most recent trial in `study` to resume last failed
         hyperparameter combination.
     """
-    count = 0
+    count = sum(
+        t.state in {TrialState.COMPLETE, TrialState.PRUNED}
+        for t in study.trials)
     re_enqueue = False
-    if len(study.trials) > 0:
-        count = sum([
-            1 for t in study.trials if
-            t.state != optuna.trial.TrialState.FAIL])
-        if study.trials[-1].state == optuna.trial.TrialState.FAIL:
-            study.enqueue_trial(study.trials[-1].params)
-            re_enqueue = True
+    if len(study.trials) > 0 and study.trials[-1].state == TrialState.FAIL:
+        study.enqueue_trial(study.trials[-1].params)
+        re_enqueue = True
 
     return count, re_enqueue
