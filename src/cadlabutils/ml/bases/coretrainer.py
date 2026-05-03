@@ -10,7 +10,6 @@ Created on Wed Jan 22 09:00:00 2025
 from abc import ABC, abstractmethod
 import time
 from pathlib import Path
-import shutil
 
 # 2. Third-party library imports
 import matplotlib.pyplot as plt
@@ -627,14 +626,11 @@ class CoreTrainer(ABC):
                 if trial.should_prune():
                     del _loader, valid_loader
                     self._clean_up(task_id)
-                    shutil.rmtree(self.my_dir)
                     raise optuna.TrialPruned()
 
         # remove within-loop values from memory
         del _loader, valid_loader
         self._clean_up(task_id)
-        if trial is not None:
-            shutil.rmtree(self.my_dir)
 
     def evaluate(
             self,
