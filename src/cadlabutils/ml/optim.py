@@ -38,7 +38,7 @@ def pull_trials(
     study = optuna.load_study(
         study_name=name, storage=f"sqlite:///{study_sqlite}")
     trials = study.trials if not completed else [
-        t for t in study.trials if t.value is not None]
+        t for t in study.trials if t.state == TrialState.COMPLETE]
     return trials
 
 
