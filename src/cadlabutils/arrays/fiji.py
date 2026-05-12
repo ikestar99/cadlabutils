@@ -36,6 +36,38 @@ close()
 close(origTitle)
 """
 
+PROB_OVERLAY = """
+#@ String inputPath
+#@ String probPath
+#@ String outputPath
+#@ int opacity        // 0–100, where 100 = fully visible overlay
+#@ String lutColor    // e.g. "Fire", "Inferno", "Magenta", "Green", "Ice"
+
+setBatchMode(true);
+open(inputPath);
+origTitle = getTitle();
+
+open(probPath);
+probTitle = getTitle();
+run(lutColor);
+
+run("Select All");
+run("Copy");
+
+selectWindow(origTitle);
+run("Paste");
+Overlay.paste;
+
+Overlay.setOpacity(opacity / 100.0);
+run("Flatten");
+
+saveAs("PNG", outputPath);
+close();
+selectWindow(probTitle);
+close();
+"""
+
+
 def _get_fiji(
         ij_path: Path
 ):
@@ -59,3 +91,16 @@ def rolling_ball_background(
     _get_fiji(ij_path).py.run_macro(ROLLING_BALL, {
         "inputPath": tif_path, "outputPath": out_path, "radius": radius,
         "background": background})
+
+
+def prob_overlap(
+        tif_path: Path,
+        prob_path: Path,
+        out_path: Path,
+        opacity: int = 20,
+        lut: str = "mpl-magma",
+        ij_path: Path = None
+):
+    _get_fiji(ij_path).py.run_macro(PROB_OVERLAY, {
+        "inputPath": tif_path, "probPath": prob_path, "outputPath": out_path,
+        "opacity": opacity, "lutColor": lut})
