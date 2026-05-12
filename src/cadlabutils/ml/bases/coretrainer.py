@@ -15,7 +15,6 @@ import shutil
 # 2. Third-party library imports
 import matplotlib.pyplot as plt
 import numpy as np
-import optuna
 import pandas as pd
 import seaborn as sns
 import torch
@@ -464,7 +463,7 @@ class CoreTrainer(ABC):
             safe_count: int = 0,
             task_id: cdu.rp.TaskID = None,
             min_iter: int = 100,
-            trial: optuna.Trial = None,
+            trial: object = None,
             workers: int = 12
     ):
         """Train a pytorch model on a preconfigured train/test dataset split.
@@ -623,6 +622,7 @@ class CoreTrainer(ABC):
 
             # early stopping with optuna
             if trial is not None:
+                import optuna
                 trial.report(np.median(epoch_loss), step=e)
                 if trial.should_prune():
                     del _loader, valid_loader

@@ -40,31 +40,25 @@ PROB_OVERLAY = """
 #@ String inputPath
 #@ String probPath
 #@ String outputPath
-#@ int opacity        // 0–100, where 100 = fully visible overlay
-#@ String lutColor    // e.g. "Fire", "Inferno", "Magenta", "Green", "Ice"
+#@ int opacity
+#@ String lutColor
 
 setBatchMode(true);
 open(inputPath);
-origTitle = getTitle();
+refTitle = getTitle();
+run("RGB Color");
 
 open(probPath);
 probTitle = getTitle();
 run(lutColor);
+run("RGB Color");
 
-run("Select All");
-run("Copy");
+selectWindow(refTitle);
+run("Add Image...", "image=[" + probTitle + "] opacity=" + opacity);
 
-selectWindow(origTitle);
-run("Paste");
-Overlay.paste;
-
-Overlay.setOpacity(opacity / 100.0);
 run("Flatten");
-
 saveAs("PNG", outputPath);
-close();
-selectWindow(probTitle);
-close();
+close("*");
 """
 
 
@@ -93,7 +87,7 @@ def rolling_ball_background(
         "background": background})
 
 
-def prob_overlap(
+def prob_overlay(
         tif_path: Path,
         prob_path: Path,
         out_path: Path,
