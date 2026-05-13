@@ -272,6 +272,37 @@ def dtype_norm(
         raise NotImplementedError(f"Cannot normalize {arr.dtype} array.")
 
 
+def percentile_norm(
+        arr: np.ndarray,
+        low: float,
+        high: float
+):
+    """Normalize array to percentile boundaries.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array to normalize.
+    low : float
+        Lower percentile (0-100) that maps to 0.
+    high : float
+        Upper percentile (0-100) that maps to 1.
+
+    Returns
+    -------
+    np.ndarray
+        Percentile-normalized array clipped to [0, 1].
+    """
+    if not (0 <= low < high <= 100):
+        raise ValueError("low and high must satisfy 0 <= low < high <= 100")
+
+    lo_val = np.percentile(arr, low)
+    hi_val = np.percentile(arr, high)
+    denom = hi_val - lo_val
+    norm = (arr - lo_val) / (denom or 1)
+    return np.clip(norm, 0, 1)
+
+
 def masked_statistic(
         arr: np.ndarray,
         mask: np.ndarray,
