@@ -536,6 +536,8 @@ class CoreTrainer(ABC):
                 ["epoch", "subset"]].drop_duplicates(keep="first").shape[0]
             if _done >= epochs * subepochs:
                 return
+        if trial is not None:
+            self.stat_csv = self.stat_csv.parent / "optim_history.csv"
 
         self._initialize()
         self._track_memory()
