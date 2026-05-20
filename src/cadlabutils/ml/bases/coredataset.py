@@ -138,6 +138,17 @@ class CoreDataset(Dataset):
               3                0
         tail  6                1
 
+    Invert index.
+    >>> t_dataset.inverted  # doctest: +NORMALIZE_WHITESPACE
+                     day label count
+    _data_index
+    2            Mon  head     1
+    4            Mon  head     2
+    0            Mon  head     3
+    3            Mon  tail     4
+    1            Mon  tail     6
+    5            Mon  tail     8
+
     Generate k-fold split stratified by label metadata.
     >>> for i, (t, v) in enumerate(
     ...         t_dataset.k_fold(3, stratify=["label"])):
@@ -406,6 +417,20 @@ class CoreDataset(Dataset):
             truth_var=self.truth_var,
             _parent=self if self.parent is None else self.parent)
         return subset
+
+    @property
+    def inverted(
+            self
+    ):
+        """
+        Returns
+        -------
+        pd.DataFrame
+            Instance `meta` data indexed by sample index, rather than metadata.
+            Metadata levels are stored as columns, rather than a hierarchical
+            index.
+        """
+        return self.meta.reset_index(drop=False).set_index(self._INDEX)
 
     def get_metadata(
             self,
