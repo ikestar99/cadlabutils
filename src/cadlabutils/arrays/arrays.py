@@ -166,8 +166,7 @@ def remove_blobs(
 def min_max_scaling(
         arr: np.ndarray,
         new_min: float = 0.0,
-        new_max: float = 1.0,
-        dtype: np.dtype = None,
+        new_max: float = 1.0
 ):
     """Rescale array to set minimum and maximum values.
 
@@ -181,9 +180,6 @@ def min_max_scaling(
     new_max : float, optional
         Maximum value in scaled array.
         Defaults to 1.
-    dtype : np.dtype, optional
-        Data type of the scaled array.
-        Defaults to None, in which case return type same as `arr` dtype.
 
     Returns
     -------
@@ -212,11 +208,10 @@ def min_max_scaling(
     >>> t_max
     np.int64(8)
     """
-    dtype = arr.dtype if dtype is None else dtype
     old_min, old_max = np.min(arr), np.max(arr)
-    scaled = (arr - old_min) / (old_max - old_min)
+    scaled = (arr.astype(float) - old_min) / (old_max - old_min)
     scaled = (scaled * (new_max - new_min)) + new_min
-    return scaled.astype(dtype), old_min, old_max
+    return scaled, old_min, old_max
 
 
 def dtype_norm(
@@ -265,7 +260,7 @@ def dtype_norm(
     info = np.iinfo if np.issubdtype(arr.dtype, np.integer) else np.finfo
     try:
         peak = max(abs(info(arr.dtype).min), info(arr.dtype).max)
-        normed = arr - offset if offset is not None else arr
+        normed = arr.astype(float) - offset if offset is not None else arr
         normed = normed / peak
         return normed
     except ValueError:
@@ -299,7 +294,7 @@ def percentile_norm(
     lo_val = np.percentile(arr, low)
     hi_val = np.percentile(arr, high)
     denom = hi_val - lo_val
-    norm = (arr - lo_val) / (denom or 1)
+    norm = (arr.astype(float) - lo_val) / (denom or 1)
     return np.clip(norm, 0, 1)
 
 
