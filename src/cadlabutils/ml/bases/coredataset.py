@@ -95,6 +95,14 @@ class CoreDataset(Dataset):
               6                1
               8                5
 
+    Extract stored item.
+    >>> t_dataset[3]  # doctest: +NORMALIZE_WHITESPACE
+    day             Mon
+    label          tail
+    count             4
+    _data_index       3
+    Name: 0, dtype: object
+
     Rich print instance data.
     >>> print(t_dataset)  # doctest: +NORMALIZE_WHITESPACE
     ┏━━━━━┳━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
@@ -137,6 +145,14 @@ class CoreDataset(Dataset):
               2                4
               3                0
         tail  6                1
+
+    Extract stored item from filtered instance.
+    >>> t_subset[3]  # doctest: +NORMALIZE_WHITESPACE
+    day             Mon
+    label          tail
+    count             6
+    _data_index       1
+    Name: 0, dtype: object
 
     Invert index.
     >>> t_dataset.inverted  # doctest: +NORMALIZE_WHITESPACE
@@ -237,34 +253,34 @@ class CoreDataset(Dataset):
 
     def __getitem__(
             self,
-            idx
+            idx: int | pd.Series
     ):
-        """Get index of underlying data.
+        """Get metadata of underlying sample.
 
         Parameters
         ----------
-        idx : int
-            Index of sample to pull.
+        idx : int | pd.Series
+            Sample to pull. If ``int``, index along length of current instance.
+            If ``pd.Series``, extracted metadata of desired sample, passed from
+            child instance to parent instance.
 
         Returns
         -------
         item : pd.Series | Any
             sample stored at `idx`. If `parent` attribute is None, `item` is a
-            ``Series`` that contains all metadata for the `idx`th sample stored
-            in the instance. If `parent` attribute is not None, `item` is the
-            result of `parent.__getitem__(index of the `idx`th sample)`.
+            ``pd.Series`` that contains all metadata for the `idx`th sample
+            stored in the instance. If `parent` attribute is not None, `item`
+             is the result of `parent.__getitem__(index of the `idx`th sample)`.
 
         Notes
         -----
-        There are two sets of indices to speak of -- indices that point to each
-        sample stored in current instance, and indices that point to the
-        underlying data to which each set of metadata values refer. The former
-        is 0-indexed up to the length of the instance. The latter values are
-        stored in `meta[CoreDataset._INDEX]`.
-        `CoreDataset.__getitem__` takes the former index system as input.
+        When overriden in child classes, __getitem__ should take either ``int``
+        index or ``pd.Series`` as input. The latter contains all desired
+        metadata for samples stored in the parent instance.
         """
-        item = self.meta.iloc[[idx]].reset_index(drop=False).iloc[0]
-        item = item if self.parent is None else self.parent[item[self._INDEX]]
+        item = idx if isinstance(idx, pd.Series) else self.meta.iloc[
+            [idx]].reset_index(drop=False).iloc[0]
+        item = item if self.parent is None else self.parent[item]
         return item
 
     def __add__(
