@@ -7,6 +7,7 @@ Created on Tue July 4 13:06:21 2023
 
 
 # 1. Standard library imports
+import random
 from typing import Callable
 
 # 2. Third-party library imports
@@ -267,10 +268,39 @@ def dtype_norm(
         raise NotImplementedError(f"Cannot normalize {arr.dtype} array.")
 
 
+def d4_augment(
+    arr: np.ndarray
+):
+    """Perform D4 augmentation on final two spatial dimensions of image array.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Array to augment.
+
+    Returns
+    -------
+    arr : np.ndarray
+        Augmented array.
+    """
+    aug = random.getrandbits(3)
+    if (aug & 3) == 1:  # 90o clockwise rotation
+        arr = arr.swapaxes(-2, -1)[..., ::-1, :]
+    elif (aug & 3) == 2:  # reflection around y = x
+        arr = arr[..., ::-1, ::-1]
+    elif (aug & 3) == 3:  # 90o counterclockwise rotation
+        arr = arr.swapaxes(-2, -1)[..., :, ::-1]
+    if aug & 4:  # random reflection around x
+        arr = arr[..., ::-1]
+
+    return arr
+
+
 def percentile_norm(
         arr: np.ndarray,
         low: float,
-        high: float
+        high: float,
+        clip: bool = True
 ):
     """Normalize array to percentile boundaries.
 
@@ -282,6 +312,9 @@ def percentile_norm(
         Lower percentile (0-100) that maps to 0.
     high : float
         Upper percentile (0-100) that maps to 1.
+    clip : bool, optional
+        If True, clip normalized array to [0, 1].
+        Defaults to True
 
     Returns
     -------
@@ -295,7 +328,8 @@ def percentile_norm(
     hi_val = np.percentile(arr, high)
     denom = hi_val - lo_val
     norm = (arr.astype(float) - lo_val) / (denom or 1)
-    return np.clip(norm, 0, 1)
+    norm = np.clip(norm, 0, 1) if clip else norm
+    return norm
 
 
 def masked_statistic(
