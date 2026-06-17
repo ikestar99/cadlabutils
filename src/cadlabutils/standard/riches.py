@@ -264,13 +264,14 @@ class TreeBar(rp.Progress):
 
     def remove_task(
             self,
-            task_id
+            *args
     ):
-        idx = self._ids.index(task_id)
-        super(TreeBar, self).remove_task(task_id)
-        self._ids.pop(idx)
-        self._tabs.pop(idx)
-        self._update_tree()
+        for task_id in args:
+            idx = self._ids.index(task_id)
+            super(TreeBar, self).remove_task(task_id)
+            self._ids.pop(idx)
+            self._tabs.pop(idx)
+            self._update_tree()
 
     def stop_tasks(
             self,
