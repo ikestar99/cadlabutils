@@ -18,6 +18,7 @@ import scipy.ndimage as scn
 import scipy.stats as sst
 from scipy.spatial.distance import pdist
 import skimage.morphology as skm
+import sklearn.decomposition as skd
 
 
 rng = np.random.default_rng(42)
@@ -762,3 +763,20 @@ def corr_coef(
     corr_matrix = arr_1 @ arr_2.T / np.outer(
         np.linalg.norm(arr_1, axis=1), np.linalg.norm(arr_2, axis=1))
     return corr_matrix
+
+
+def shuffle_pca(
+        arr: np.ndarray
+):
+    raw_pca = skd.PCA(n_components=None).fit(arr)
+    raw_var = raw_pca.explained_variance_ratio_
+    tot_var = np.sum(raw_pca.explained_variance) / np.sum(
+        raw_pca.explained_variance_ratio_)
+    for row in arr:
+        rng.shuffle(row)
+
+    ref_var = skd.PCA(n_components=None).fit(arr).explained_variance_ratio_
+    signed_contrib = np.ascontiguousarray(
+        raw_pca.components_ * np.abs(raw_pca.components_)
+        * raw_pca.explained_variance_ratio_[:, None])
+    return signed_contrib, raw_var, ref_var, tot_var, raw_pca

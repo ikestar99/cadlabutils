@@ -7,9 +7,6 @@ Created on Tue Aug 12 09:00:00 2025
 
 
 # 3. Local application / relative imports
-from .unet import (
-    UNet2D, UNet3D, UNet2DClassifier, UNet3DClassifier, UNet3DHalfClassifier)
-from .snemi import (
-    SNEMI2D, SNEMI3D, SNEMI2DClassifier, SNEMI3DClassifier,
-    SNEMI3DHalfClassifier)
+from .unet import UNet2D, UNet3D, UNet2DClassifier, UNet3DClassifier
+from .snemi import SNEMI2D, SNEMI3D, SNEMI2DClassifier, SNEMI3DClassifier
 from .patchseq_autorecon import RSUNetMulti

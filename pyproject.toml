@@ -26,7 +26,8 @@ dependencies = [
 arrays = [
   "pystackreg",
   "scikit-image",
-  "pyimagej"
+  "pyimagej",
+  "sklearn"
 ]
 
 files = [
