@@ -260,7 +260,7 @@ class SWCGraph:
     def from_coordinates(
             cls,
             coords: np.ndarray,
-            parents: np.ndarray,
+            parents: np.ndarray = None,
             nodes: np.ndarray = None,
             types: np.ndarray = None,
             radii: np.ndarray = None,
@@ -273,8 +273,9 @@ class SWCGraph:
         coords : np.ndarray
             Coordinates of each node in pixels, unless resolution is specified.
             Of shape (nodes, 3) with the second axis ordered as (z, y, x).
-        parents : np.ndarray
+        parents : np.ndarray, optional
             Parent node id of each node. Of shape (nodes,).
+            Defaults to None, in which case all nodes are disconnected.
         nodes : np.ndarray, optional
             Node ids. Of shape (nodes,).
             Defaults to None, in which case node id is inferred from index.
@@ -294,14 +295,16 @@ class SWCGraph:
             Skeleton instance assembled from components.
         """
         # fill missing columns with default values
-        nodes = (nodes or np.arange(coords.shape[0]))[:, None]
-        types = (types or np.ones(nodes.shape[0]))[:, None]
-        radii = (radii or np.ones(nodes.shape[0]))[:, None]
+        data = [
+            np.arange(coords.shape[0]) if nodes is None else nodes,
+            np.ones(coords.shape[0]) if types is None else types,
+            coords[..., ::-1],
+            np.ones(coords.shape[0]) if radii is None else radii,
+            np.ones(coords.shape[0]) * -1 if parents is None else parents]
+        data = [a[:, None] if a.ndim == 1 else a for a in data]
 
         # stack data into dataframe
-        data = pd.DataFrame(np.concatenate(
-            [nodes, types, coords[..., ::-1], radii, parents[..., None]],
-            axis=-1))
+        data = pd.DataFrame(np.concatenate(data, axis=-1))
         return cls(data=data, resolution=resolution)
 
     def save(
