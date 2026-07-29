@@ -18,7 +18,7 @@ IntArrayLike = Union[list[int] | tuple[int] | np.ndarray[int]]
 
 def arr_slice(
         start: IntArrayLike,
-        stop: IntArrayLike,
+        stop: IntArrayLike = None,
         step: int | IntArrayLike = 1,
         end: IntArrayLike = None,
         s_buff: int | IntArrayLike = 0,
@@ -31,8 +31,9 @@ def arr_slice(
     start : IntArrayLike
         Start coordinated of each slice. Length determines number of slice
         objects.
-    stop : IntArrayLike
+    stop : IntArrayLike, optional
         End coordinated of each slice. Same length as `start`.
+        Defaults to None, in which case `start` is used.
     step : int | IntArrayLike, optional
         Step size of each slice. If array-like, same length as `start`. If
         integer, use the same step size for all slice dimensions.
@@ -77,6 +78,7 @@ def arr_slice(
     >>> arr_slice(t_start, t_stop, t_step, t_end, s_buff=t_s, e_buff=t_e)
     (slice(0, 25, 2), slice(6, 25, 3))
     """
+    stop = [s for s in start] if stop is None else stop
     start = np.array(start) - np.array(s_buff)
     start = np.maximum(start, 0)
     stop = np.array(stop) + np.array(e_buff)
