@@ -437,37 +437,3 @@ class RSUNetMulti(nn.Module):
 
         # Output feature embedding without batchnorm
         return self.outputdeconv(self.embedconv(x))[0]
-
-
-class Monkey2DRSUNetMulti(RSUNetMulti):
-    def __init__(
-            self
-    ):
-        super(Monkey2DRSUNetMulti, self).__init__()
-
-    def forward(
-            self,
-            x: torch.tensor
-    ):
-        x = x.unsqueeze(2).expand(-1, -1, 32, -1, -1)
-        x = super().forward(x)
-        x = x[:, :, *tuple([s // 2 for s in x.size()[2:]])]
-        x = torch.stack([x[:, 0], torch.logsumexp(x[:, 1:], dim=1)], dim=1)
-        return x
-
-
-class Monkey3DRSUNetMulti(RSUNetMulti):
-    def __init__(
-            self
-    ):
-        super(Monkey3DRSUNetMulti, self).__init__()
-
-    def forward(
-            self,
-            x: torch.tensor
-    ):
-        x = x if x.size(2) <= 32 else x.narrow(2, (x.size(2) - 32) // 2, 32)
-        x = super().forward(x)
-        x = x[:, :, *tuple([s // 2 for s in x.size()[2:]])]
-        x = x[:, [0, 2, 3]]  # background, axon, dendrite -- drop soma logit
-        return x
