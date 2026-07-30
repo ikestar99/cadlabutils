@@ -33,6 +33,8 @@ def style_ax(
         y_ticks: tuple[float, ...] = None,
         x_color: str = None,
         y_color: str = None,
+        x_cross: float = 0,
+        y_cross: float = 0,
         tick_size: int = 30,
         label_size: int = 25,
         label_weight: str = "bold",
@@ -41,9 +43,9 @@ def style_ax(
 ):
     for spine in ax.spines.values():
         spine.set(color=label_color, linewidth=line_width)
-    for axis, label, ticks, color in (
-            ("x", x_label, x_ticks, x_color),
-            ("y", y_label, y_ticks, y_color)):
+    for axis, label, ticks, color, cross in (
+            ("x", x_label, x_ticks, x_color, x_cross),
+            ("y", y_label, y_ticks, y_color, y_cross)):
         if label is not None:
             getattr(ax, f"set_{axis}label")(
                 label, fontsize=label_size, fontweight=label_weight,
@@ -53,6 +55,13 @@ def style_ax(
             getattr(ax, f"set_{axis}ticks")(ticks)
         if color is not None:
             getattr(ax, f"{axis}axis").label.set_color(color)
+
+        bounds = getattr(ax, f"get_{axis}lim")
+        if bounds[0] < cross < bounds[1]:
+            l, s = ("h", "bottom") if axis == "x" else ("v", "left")
+            getattr(ax, f"ax{l}line")(
+                0, color="black", linewidth=line_width, zorder=0)
+            ax.spines[s].set_visible(False)
 
     # Bold tick labels (can control independently)
     ax.tick_params(
