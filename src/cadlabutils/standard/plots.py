@@ -39,13 +39,14 @@ def style_ax(
         label_size: int = 25,
         label_weight: str = "bold",
         label_color: str = "black",
-        line_width: int = 5
+        line_width: int = 5,
+        draw_yx: bool = False,
 ):
     for spine in ax.spines.values():
         spine.set(color=label_color, linewidth=line_width)
     for axis, label, ticks, color, cross in (
-            ("x", x_label, x_ticks, x_color, x_cross),
-            ("y", y_label, y_ticks, y_color, y_cross)):
+            ("x", x_label, x_ticks, x_color, y_cross),
+            ("y", y_label, y_ticks, y_color, x_cross)):
         if label is not None:
             getattr(ax, f"set_{axis}label")(
                 label, fontsize=label_size, fontweight=label_weight,
@@ -53,15 +54,22 @@ def style_ax(
         if ticks is not None:
             getattr(ax, f"set_{axis}lim")(ticks[0], ticks[-1])
             getattr(ax, f"set_{axis}ticks")(ticks)
+            bounds = getattr(ax, f"get_{axis}lim")()
+            if bounds[0] < cross < bounds[1]:
+                l, s = ("h", "bottom") if axis == "y" else ("v", "left")
+                getattr(ax, f"ax{l}line")(
+                    cross, color="black", linewidth=line_width, zorder=0)
+                ax.spines[s].set_visible(False)
         if color is not None:
             getattr(ax, f"{axis}axis").label.set_color(color)
 
-        bounds = getattr(ax, f"get_{axis}lim")
-        if bounds[0] < cross < bounds[1]:
-            l, s = ("h", "bottom") if axis == "x" else ("v", "left")
-            getattr(ax, f"ax{l}line")(
-                0, color="black", linewidth=line_width, zorder=0)
-            ax.spines[s].set_visible(False)
+    if draw_yx:
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        lo, hi = max(xmin, ymin), min(xmax, ymax)
+        ax.plot([lo, hi], [lo, hi], linestyle="--", color="gray", zorder=0)
+    if x_ticks is not None and x_ticks == y_ticks:
+        ax.set_aspect('equal', adjustable='box')
 
     # Bold tick labels (can control independently)
     ax.tick_params(
