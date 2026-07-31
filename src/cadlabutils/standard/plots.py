@@ -23,6 +23,7 @@ import seaborn as sns
 sns.set_theme(
     style="ticks", palette="rocket",
     rc={"axes.spines.right": False, "axes.spines.top": False})
+_SAVE_KWARGS = {"dpi": 300, "bbox_inches": "tight", "pad_inches": 0}
 
 
 def style_ax(
@@ -76,6 +77,17 @@ def style_ax(
         axis="both", which="major", labelsize=tick_size, width=line_width,
         colors=label_color)
     return ax
+
+
+def save_fig(
+        name,
+        root_dir,
+        fig=None
+):
+    fig = plt.gcf() if fig is None else fig
+    root_dir.mkdir(exist_ok=True, parents=True)
+    fig.savefig(root_dir / f"{name}.png", **_SAVE_KWARGS)
+    plt.close(fig)
 
 
 def generate_3d_plot(data, save, i_vars, hue):
