@@ -259,6 +259,7 @@ class _UNetClassifier(_UNet):
         self.dense = nn.Sequential(
             make_dense([self.c_f, *d_l], norm=True, act=act_l, drop=drop_l),
             nn.Linear(d_l[-1], c_o))
+        self.return_embedding = False
 
     def forward(
             self,
@@ -273,10 +274,12 @@ class _UNetClassifier(_UNet):
 
         Returns
         -------
-        torch.tensor
+        x : torch.tensor
         """
         x = self.avg(super(_UNetClassifier, self).forward(x, decode=False))
-        return self.dense(torch.flatten(x, start_dim=1))
+        x = torch.flatten(x, start_dim=1)
+        x = x if self.return_embedding else self.dense(x)
+        return x
 
 
 class UNet2D(_D2, _UNet):

@@ -287,7 +287,7 @@ def d4_augment(
     aug = random.getrandbits(3)
     if (aug & 3) == 1:  # 90o clockwise rotation
         arr = arr.swapaxes(-2, -1)[..., ::-1, :]
-    elif (aug & 3) == 2:  # reflection around y = x
+    elif (aug & 3) == 2:  # 180o rotation
         arr = arr[..., ::-1, ::-1]
     elif (aug & 3) == 3:  # 90o counterclockwise rotation
         arr = arr.swapaxes(-2, -1)[..., :, ::-1]

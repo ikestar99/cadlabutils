@@ -648,7 +648,8 @@ class CoreTrainer(ABC):
             in_idx: int | str = slice(None),
             logits: bool = True,
             fold: int = None,
-            workers: int = 12
+            workers: int = 12,
+            return_embedding: bool = False
     ):
         """Inference on unlabeled data with trained model.
 
@@ -705,6 +706,7 @@ class CoreTrainer(ABC):
             eval_dataset, batch_size=self.batch_size, num_workers=workers,
             pin_memory=True)
         self.p_bar.update(task_id, total=len(eval_loader), start=True)
+        setattr(self.model, "return_embedding", return_embedding)
         for b, batch in enumerate(eval_loader):
             output, _, _ = utils.forward_pass(
                 self.model, batch[in_idx], device=self.device,
