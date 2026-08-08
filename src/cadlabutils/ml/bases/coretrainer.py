@@ -711,9 +711,11 @@ class CoreTrainer(ABC):
             output, _, _ = utils.forward_pass(
                 self.model, batch[in_idx], device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            output = F.softmax(output, dim=1) if logits else output
+            output = [o for o in output] if return_embedding else [output]
+            output[0] = F.softmax(output[0], dim=1) if logits else output[0]
+            output = tuple([o.detach().cpu().numpy() for o in output])
             self.p_bar.update(task_id, completed=b)
-            yield b * self.batch_size, output.detach().cpu().numpy()
+            yield b * self.batch_size, *output
 
         del eval_loader
         self._clean_up(task_id)

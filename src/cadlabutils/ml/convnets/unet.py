@@ -278,8 +278,8 @@ class _UNetClassifier(_UNet):
         """
         x = self.avg(super(_UNetClassifier, self).forward(x, decode=False))
         x = torch.flatten(x, start_dim=1)
-        x = x if self.return_embedding else self.dense(x)
-        return x
+        o = self.dense(x)
+        return (o, x) if self.return_embedding else o
 
 
 class UNet2D(_D2, _UNet):

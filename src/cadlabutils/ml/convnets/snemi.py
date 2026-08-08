@@ -404,10 +404,10 @@ class _SNEMIClassifier(_SNEMI):
         x : torch.tensor
         """
         x = self.avg(super(_SNEMIClassifier, self).forward(x, decode=False))
-        x = torch.mean(x, dim=2) if self.return_embedding else x
-        x = torch.flatten(x, start_dim=1)
-        x = x if self.return_embedding else self.dense(x)
-        return x
+        o =  self.dense(torch.flatten(x, start_dim=1))
+        return (
+            (o, torch.flatten(torch.mean(x, dim=2), start_dim=1))
+            if self.return_embedding else o)
 
 
 class SNEMI2D(_D2, _SNEMI):
