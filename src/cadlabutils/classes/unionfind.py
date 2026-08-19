@@ -69,6 +69,10 @@ class UnionFind:
         keep : np.ndarray
             Boolean array of point indices to keep. Kept points are at least
             `radius` units away from the nearest kept point.
+        dedup_count : int
+            Number of de-duplicated nodes.
+        diss_count : int
+            Number of removed nodes with dissimilar labels.
 
         Notes
         -----
@@ -77,6 +81,7 @@ class UnionFind:
         - If labels are dissimilar, both points are dropped.
         """
         keep = np.ones(coords.shape[0], dtype=bool)
+        dedup_count, diss_count = 0, 0
 
         # iterate over point pairs within a minimum radius of each other
         for i, j in ssp.cKDTree(coords).query_pairs(radius):
@@ -85,14 +90,16 @@ class UnionFind:
                 continue
             # drop adjacent points with dissimilar labels
             elif labels[i] != labels[j]:
+                diss_count += int(keep[i]) + int(keep[j])
                 keep[i] = False
                 keep[j] = False
             # randomly keep one if labels match
             elif keep[i] and keep[j]:
                 _idx = i if np.random.default_rng().random() < 0.5 else j
                 keep[_idx] = False
+                dedup_count += 1
 
-        return keep
+        return keep, dedup_count, diss_count
 
     def find(
             self,
