@@ -47,6 +47,53 @@ class UnionFind:
         self._prev = [-1] * n
         self._rank = [0] * n
 
+    @staticmethod
+    def filter_adjacent(
+            coords: np.ndarray,
+            labels: np.ndarray,
+            radius: float
+    ):
+        """Filter adjacent points by distance and type.
+
+        Parameters
+        ----------
+        coords : np.ndarray
+            Coordinates of all valid points. Shape is (n_points, n_dimensions).
+        labels : np.ndarray
+            Label of each point in `coords`. Shape is (n_points,).
+        radius : float
+            Minimum required separation between valid points.
+
+        Returns
+        -------
+        keep : np.ndarray
+            Boolean array of point indices to keep. Kept points are at least
+            `radius` units away from the nearest kept point.
+
+        Notes
+        -----
+        In cases where multiple points are within `radius` units:
+        - If labels are identical, one point is randomly dropped.
+        - If labels are dissimilar, both points are dropped.
+        """
+        keep = np.ones(coords.shape[0], dtype=bool)
+
+        # iterate over point pairs within a minimum radius of each other
+        for i, j in ssp.cKDTree(coords).query_pairs(radius):
+            # skip empty comparisons
+            if not keep[i] and not keep[j]:
+                continue
+            # drop adjacent points with dissimilar labels
+            elif labels[i] != labels[j]:
+                keep[i] = False
+                keep[j] = False
+            # randomly keep one if labels match
+            elif keep[i] and keep[j]:
+                _idx = i if np.random.default_rng().random() < 0.5 else j
+                keep[_idx] = False
+
+        return keep
+
     def find(
             self,
             x: int
