@@ -765,18 +765,46 @@ def corr_coef(
     return corr_matrix
 
 
-def shuffle_pca(
-        arr: np.ndarray
+def _null_pca(
+        arr: np.ndarray,
+        repeat: int = 10,
+):
+    """Generate a shuffled reference variance distribution with PCA.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Data to control with PCA. Has shape (n_observations, n_features).
+    repeat : int, optional
+        Number of null replicates to generate.
+        Defaults to 10.
+
+    Returns
+    -------
+    np.ndarray
+        Ratio of total variance in 'arr' explained by each principal component
+        following PCA after shuffling features within each observation. Has
+        shape ('repeat', n_components).
+    """
+    ratios = []
+    for _ in range(repeat):
+        for row in arr:
+            rng.shuffle(row)
+
+        ratios.append(skd.PCA().fit(arr).explained_variance_ratio_)
+
+    return np.stack(ratios, axis=0)
+
+def shuffled_pca(
+        arr: np.ndarray,
+        repeat: int = 10,
 ):
     raw_pca = skd.PCA(n_components=None).fit(arr)
     raw_var = raw_pca.explained_variance_ratio_
     tot_var = np.sum(raw_pca.explained_variance) / np.sum(
         raw_pca.explained_variance_ratio_)
-    for row in arr:
-        rng.shuffle(row)
-
-    ref_var = skd.PCA(n_components=None).fit(arr).explained_variance_ratio_
     signed_contrib = np.ascontiguousarray(
         raw_pca.components_ * np.abs(raw_pca.components_)
         * raw_pca.explained_variance_ratio_[:, None])
+    ref_var = _null_pca(arr, repeat=repeat)
     return signed_contrib, raw_var, ref_var, tot_var, raw_pca
