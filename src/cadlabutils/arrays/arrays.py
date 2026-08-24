@@ -788,23 +788,24 @@ def _null_pca(
     """
     ratios = []
     for _ in range(repeat):
-        for row in arr:
-            rng.shuffle(row)
-
-        ratios.append(skd.PCA().fit(arr).explained_variance_ratio_)
+        shuffled = np.array([rng.permutation(row) for row in arr])
+        ratios.append(skd.PCA().fit(shuffled).explained_variance_ratio_)
 
     return np.stack(ratios, axis=0)
+
 
 def shuffled_pca(
         arr: np.ndarray,
         repeat: int = 10,
 ):
-    raw_pca = skd.PCA(n_components=None).fit(arr)
+    raw_pca = skd.PCA(n_components=None).fit(arr.copy())
     raw_var = raw_pca.explained_variance_ratio_
-    tot_var = np.sum(raw_pca.explained_variance) / np.sum(
+    tot_var = np.sum(raw_pca.explained_variance_) / np.sum(
         raw_pca.explained_variance_ratio_)
     signed_contrib = np.ascontiguousarray(
         raw_pca.components_ * np.abs(raw_pca.components_)
         * raw_pca.explained_variance_ratio_[:, None])
     ref_var = _null_pca(arr, repeat=repeat)
-    return signed_contrib, raw_var, ref_var, tot_var, raw_pca
+    intersect = np.argmin(raw_var > np.mean(ref_var, axis=0)) - 1
+
+    return signed_contrib, raw_var, ref_var, tot_var, intersect, raw_pca
