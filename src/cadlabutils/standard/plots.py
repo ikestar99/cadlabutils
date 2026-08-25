@@ -10,13 +10,16 @@ Created on Fri Apr 9 03:38:05 2021
 import io
 
 # 2. Third-party library imports
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+import pandas as pd
 from PIL import Image
 import seaborn as sns
+from sklearn.neighbors import KernelDensity
 
 
 # set style and colors
@@ -90,24 +93,42 @@ def save_fig(
     plt.close(fig)
 
 
-def generate_3d_plot(data, save, i_vars, hue):
-    c_dict = {l: i for i, l in enumerate(np.unique(data[hue]))}
-    groups = data[hue].apply(lambda x: c_dict[x])
-    cmap = ListedColormap(
-        sns.color_palette(n_colors=np.unique(data[hue]).size).as_hex())
-    fig = plt.figure(figsize=(6, 6))
-    ax = Axes3D(fig, auto_add_to_figure=False)
-    fig.add_axes(ax)
-    sc = ax.scatter(
-        *[data[c] for c in i_vars], s=20, c=groups, cmap=cmap, alpha=1)
-    ax.set_xlabel(i_vars[0])
-    ax.set_ylabel(i_vars[1])
-    ax.set_zlabel(i_vars[2])
-    plt.legend(
-        handles=sc.legend_elements()[0], labels=c_dict.keys(),
-        bbox_to_anchor=(1.05, 1), loc=2)
-    plt.savefig(save, bbox_inches='tight')
-    plt.clf()
+def ridgeplot(
+        data: pd.DataFrame,
+        x: str,
+        ax,
+        hue: str,
+        hue_order: list,
+        palette: dict,
+        clip: tuple,
+        bins: int = 100,
+        lw: float = 5,
+        spacing: float = 0.8
+):
+    lines = {}
+    for h, h_df in data.groupby(hue):
+        _y, _x = np.histogram(h_df[x], bins=bins)
+        # _x = np.linspace(clip[0], clip[1], bins)
+        # _y = h_df[x].dropna().to_numpy()
+        # kde = KernelDensity(
+        #     kernel="gaussian", bandwidth=0.2).fit(_y[:, None])
+        # _y = np.exp(kde.score_samples(_x[:, None]))
+        lines[h] = _x[:-1], _y / np.trapezoid(_y, _x[:-1])
+
+    offset = max([lines[k][1].max() for k in lines]) * spacing
+    peak = 0
+    for i, key in enumerate(hue_order):
+        if key not in lines:
+            continue
+
+        _x, _y = lines[key]
+        _dy = offset * (len(hue_order) - 1 - i)
+        ax.plot(_x, _y + _dy, color=palette[key], linewidth=lw)
+        ax.fill_between(_x, _y + _dy, _dy, color=palette[key], alpha=0.2)
+        ax.plot(_x, [_dy] * len(_x), color="gray", linewidth=lw)
+        peak = max(peak, np.max(_y + _dy))
+
+    return ax, peak * 1.1
 
 
 def fig_to_im(
