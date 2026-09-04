@@ -10,12 +10,14 @@ Created on Fri Apr 9 03:38:05 2021
 import io
 
 # 2. Third-party library imports
+from matplotlib.animation import FuncAnimation, PillowWriter
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from PIL import Image
 import seaborn as sns
 from scipy.stats import gaussian_kde
+from scipy.spatial import cKDTree
 
 
 # set style and colors
@@ -166,3 +168,62 @@ def fig_to_im(
     im = Image.open(buffer)
     plt.close(fig)
     return im
+
+
+def rotate_3d_ax(fig, ax_3d, elev: float = 25, duration: float = 10, fps: int = 20):
+    def _rotate(frame):
+        ax_3d.view_init(elev=elev, azim=3 * frame)
+        fig.canvas.draw_idle()
+
+    anim = FuncAnimation(
+        fig, _rotate, frames=int(fps * duration), interval=1000 / fps,
+        blit=False, repeat=False)
+    return anim
+
+
+def scatter3d():
+    _n, _k = 150, 200
+
+    # KD-tree over the actual observations
+    _tree = cKDTree(_e)
+
+    # Grid used only for rendering
+    _x = np.linspace(_e[:, 0].min(), _e[:, 0].max(), _n)
+    _y = np.linspace(_e[:, 1].min(), _e[:, 1].max(), _n)
+    X, Y = np.meshgrid(_x, _y, indexing="ij")
+    _grid = np.column_stack([X.ravel(), Y.ravel()])
+
+    # Find k nearest observations at each grid location
+    _, idx = _tree.query(_grid, k=_k)
+
+    # Local mean z
+    Z = prob["fold_2"][:, 1][idx].mean(axis=1).reshape(X.shape)
+    _tot_idx = []
+    for c in np.unique(y_true):
+        fig = plt.figure(figsize=(12, 9))
+        ax = fig.add_subplot(111, projection="3d")
+        ax.plot_surface(
+            X, Y, Z, cmap="viridis", linewidth=0, antialiased=True, alpha=0.5)
+
+        _idx = np.flatnonzero(y_true == c)
+        _idx = cdu_a.rng.choice(
+            _idx, size=min(n_points, _idx.size), replace=False)
+        _tot_idx.append(_idx)
+        ax.scatter(
+            _l[_idx, 0], _l[_idx, 1], prob["fold_local"][:, 1][_idx],
+            c=np.where(_p[_idx] == c, "green", "red"), s=20, alpha=0.8)
+
+        ax.set_xlabel(f"PC0: {raw_var[0]:.2%}")
+        ax.set_ylabel(f"PC1: {raw_var[1]:.2%}")
+        ax.set_zlabel("")
+        # fig.colorbar(surf, ax=ax, label=f"P(foreground | {f_h5.stem})")
+        plt.show()
+
+        # Keep the same limits throughout the animation
+        ax.set_xlim(min(X.min(), _l[:, 0].min()), max(X.max(), _l[:, 0].max()))
+        ax.set_ylim(min(Y.min(), _l[:, 1].min()), max(Y.max(), _l[:, 1].max()))
+        ax.set_zlim(0, 1)
+        rotate(fig, ax).save(
+            root / f"{f_h5.stem} class {c} rotation.gif",
+            writer=PillowWriter(fps=25))
+        plt.close(fig)
