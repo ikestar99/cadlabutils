@@ -8,6 +8,7 @@ Created on Fri Apr 9 03:38:05 2021
 
 # 1. Standard library imports
 import io
+from pathlib import Path
 
 # 2. Third-party library imports
 from matplotlib.animation import FuncAnimation, PillowWriter
@@ -170,60 +171,79 @@ def fig_to_im(
     return im
 
 
-def rotate_3d_ax(fig, ax_3d, elev: float = 25, duration: float = 10, fps: int = 20):
-    def _rotate(frame):
-        ax_3d.view_init(elev=elev, azim=3 * frame)
-        fig.canvas.draw_idle()
+def rotate_3d(
+        fig: plt.Figure,
+        name: str,
+        root_dir: Path,
+        elev: float = 25,
+        seconds: float = 10,
+        fps: int = 20,
+        aspect: tuple[float, ...] = (1, 1, 1),
+        bounds: dict = dict(),
+        labels: dict = dict()
+):
+    def _rotate(idx):
+        azimuth = (360 * idx / (fps * seconds)) - 180
+        for ax in [a for a in fig.axes if a.name == "3d"]:
+            ax.view_init(elev=elev, azim=azimuth)
 
+    for ax in [a for a in fig.axes if a.name == "3d"]:
+        ax.set_box_aspect(aspect)
+        for axis, _bound in bounds.items():
+            getattr(ax, f"set_{axis}lim")(*_bound)
+
+        for axis, _label in labels.items():
+            getattr(ax, f"set_{axis}label")(_label)
+
+    root_dir.mkdir(exist_ok=True, parents=True)
     anim = FuncAnimation(
-        fig, _rotate, frames=int(fps * duration), interval=1000 / fps,
-        blit=False, repeat=False)
-    return anim
+        fig, _rotate, frames=int(fps * seconds), blit=False, repeat=False)
+    anim.save(root_dir / f"{name}.gif", writer=PillowWriter(fps=fps))
 
 
-def scatter3d():
-    _n, _k = 150, 200
-
-    # KD-tree over the actual observations
-    _tree = cKDTree(_e)
-
-    # Grid used only for rendering
-    _x = np.linspace(_e[:, 0].min(), _e[:, 0].max(), _n)
-    _y = np.linspace(_e[:, 1].min(), _e[:, 1].max(), _n)
-    X, Y = np.meshgrid(_x, _y, indexing="ij")
-    _grid = np.column_stack([X.ravel(), Y.ravel()])
-
-    # Find k nearest observations at each grid location
-    _, idx = _tree.query(_grid, k=_k)
-
-    # Local mean z
-    Z = prob["fold_2"][:, 1][idx].mean(axis=1).reshape(X.shape)
-    _tot_idx = []
-    for c in np.unique(y_true):
-        fig = plt.figure(figsize=(12, 9))
-        ax = fig.add_subplot(111, projection="3d")
-        ax.plot_surface(
-            X, Y, Z, cmap="viridis", linewidth=0, antialiased=True, alpha=0.5)
-
-        _idx = np.flatnonzero(y_true == c)
-        _idx = cdu_a.rng.choice(
-            _idx, size=min(n_points, _idx.size), replace=False)
-        _tot_idx.append(_idx)
-        ax.scatter(
-            _l[_idx, 0], _l[_idx, 1], prob["fold_local"][:, 1][_idx],
-            c=np.where(_p[_idx] == c, "green", "red"), s=20, alpha=0.8)
-
-        ax.set_xlabel(f"PC0: {raw_var[0]:.2%}")
-        ax.set_ylabel(f"PC1: {raw_var[1]:.2%}")
-        ax.set_zlabel("")
-        # fig.colorbar(surf, ax=ax, label=f"P(foreground | {f_h5.stem})")
-        plt.show()
-
-        # Keep the same limits throughout the animation
-        ax.set_xlim(min(X.min(), _l[:, 0].min()), max(X.max(), _l[:, 0].max()))
-        ax.set_ylim(min(Y.min(), _l[:, 1].min()), max(Y.max(), _l[:, 1].max()))
-        ax.set_zlim(0, 1)
-        rotate(fig, ax).save(
-            root / f"{f_h5.stem} class {c} rotation.gif",
-            writer=PillowWriter(fps=25))
-        plt.close(fig)
+# def scatter3d():
+#     _n, _k = 150, 200
+#
+#     # KD-tree over the actual observations
+#     _tree = cKDTree(_e)
+#
+#     # Grid used only for rendering
+#     _x = np.linspace(_e[:, 0].min(), _e[:, 0].max(), _n)
+#     _y = np.linspace(_e[:, 1].min(), _e[:, 1].max(), _n)
+#     X, Y = np.meshgrid(_x, _y, indexing="ij")
+#     _grid = np.column_stack([X.ravel(), Y.ravel()])
+#
+#     # Find k nearest observations at each grid location
+#     _, idx = _tree.query(_grid, k=_k)
+#
+#     # Local mean z
+#     Z = prob["fold_2"][:, 1][idx].mean(axis=1).reshape(X.shape)
+#     _tot_idx = []
+#     for c in np.unique(y_true):
+#         fig = plt.figure(figsize=(12, 9))
+#         ax = fig.add_subplot(111, projection="3d")
+#         ax.plot_surface(
+#             X, Y, Z, cmap="viridis", linewidth=0, antialiased=True, alpha=0.5)
+#
+#         _idx = np.flatnonzero(y_true == c)
+#         _idx = cdu_a.rng.choice(
+#             _idx, size=min(n_points, _idx.size), replace=False)
+#         _tot_idx.append(_idx)
+#         ax.scatter(
+#             _l[_idx, 0], _l[_idx, 1], prob["fold_local"][:, 1][_idx],
+#             c=np.where(_p[_idx] == c, "green", "red"), s=20, alpha=0.8)
+#
+#         ax.set_xlabel(f"PC0: {raw_var[0]:.2%}")
+#         ax.set_ylabel(f"PC1: {raw_var[1]:.2%}")
+#         ax.set_zlabel("")
+#         # fig.colorbar(surf, ax=ax, label=f"P(foreground | {f_h5.stem})")
+#         plt.show()
+#
+#         # Keep the same limits throughout the animation
+#         ax.set_xlim(min(X.min(), _l[:, 0].min()), max(X.max(), _l[:, 0].max()))
+#         ax.set_ylim(min(Y.min(), _l[:, 1].min()), max(Y.max(), _l[:, 1].max()))
+#         ax.set_zlim(0, 1)
+#         rotate(fig, ax).save(
+#             root / f"{f_h5.stem} class {c} rotation.gif",
+#             writer=PillowWriter(fps=25))
+#         plt.close(fig)

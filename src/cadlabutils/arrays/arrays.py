@@ -805,7 +805,9 @@ def shuffled_pca(
     signed_contrib = np.ascontiguousarray(
         raw_pca.components_ * np.abs(raw_pca.components_)
         * raw_pca.explained_variance_ratio_[:, None])
-    ref_var = _null_pca(arr, repeat=repeat)
-    intersect = np.argmin(raw_var > np.mean(ref_var, axis=0)) - 1
+    ref_var, intersect = None, None
+    if repeat >= 1:
+        ref_var = _null_pca(arr, repeat=repeat)
+        intersect = np.argmin(raw_var > np.mean(ref_var, axis=0)) - 1
 
     return signed_contrib, raw_var, ref_var, tot_var, intersect, raw_pca

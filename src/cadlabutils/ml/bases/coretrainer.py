@@ -8,6 +8,7 @@ Created on Wed Jan 22 09:00:00 2025
 
 # 1. Standard library imports
 from abc import ABC, abstractmethod
+import filecmp
 import time
 from pathlib import Path
 import shutil
@@ -225,6 +226,18 @@ class CoreTrainer(ABC):
         indices.
         """
         pass
+
+    @property
+    def peak_fold(
+            self
+    ):
+        """Get fold identity of best performing model during training"""
+        if self.peak_path.is_file():
+            for f_safe in self.my_dir.glob("fold*.safetensors"):
+                if filecmp.cmp(f_safe, self.peak_path, shallow=False):
+                    return int(f_safe.stem.split(" ")[-1])
+
+        return None
 
     def _plot(
             self
