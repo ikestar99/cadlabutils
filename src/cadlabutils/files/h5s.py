@@ -11,7 +11,10 @@ from pathlib import Path
 
 # 2. Third-party library imports
 import hdf5plugin
-from h5py import File, Group, Dataset
+from h5py import File, Group, Dataset, string_dtype
+
+
+H5_STR = string_dtype("utf-8")
 
 
 def get_metadata(
@@ -95,8 +98,8 @@ def get_tree(
 def make_dataset(
         base: File | Group,
         name: str,
-        shape: tuple[int, ...],
-        dtype: type,
+        shape: tuple[int, ...] = None,
+        dtype: type = None,
         fill: float | str = 0.0,
         use_blosc: bool = True,
         **kwargs

@@ -279,3 +279,10 @@ class TreeBar(rp.Progress):
     ):
         for arg in args:
             self.stop_task(arg)
+
+    def remove_tasks(
+            self,
+            *args
+    ):
+        for arg in args:
+            self.remove_task(arg)

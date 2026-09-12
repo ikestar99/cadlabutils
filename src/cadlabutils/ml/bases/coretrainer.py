@@ -60,8 +60,6 @@ class CoreTrainer(ABC):
     ----------
     model : torch.nn.Module
         Model class.
-    model_kwargs : dict
-        Keyword arguments passed to `model` init.
     out_dir : pathlib.Path
         Directory in which to save training related files.
     name : str
@@ -81,9 +79,14 @@ class CoreTrainer(ABC):
 
     Other Parameters
     ----------------
+    do_init : bool, optional
+        If True, initialize model parameters.
+        Defaults to True.
     dtypes : tuple[torch.dtype], optional
         Datatype of model and ground truth, matched to loss function.
         Defaults to (torch.float32, torch.int64) for CrossEntropyLoss.
+    model_kwargs : dict
+        Keyword arguments passed to `model` init.
     criterion_kwargs : dict, optional
         Keyword arguments passed to `criterion` init.
     optimizer_kwargs : dict, optional
@@ -106,34 +109,40 @@ class CoreTrainer(ABC):
     during training. To disable this feature, set `scheduler_kwargs` to
     {"patience": dummy_epochs} where `dummy_epochs` is an integer larger than
     the number of epochs planned during training.
+
+    To simply load a reference to a trained model without allocating resources
+    for inference, use 'CoreTrainer(model, out_dir, name, do_init=False)'.
     """
     _RAM, _GPU = None, None
     _M, _C, _O, _S = "model", "criterion", "optimizer", "scheduler"
     COLS = [
         "trainer", "model", "name", "fold", "curve", "n", "b_s", "epoch",
         "subset", "mode", "t_sample", "loss", "acc"]
+    _DIR = "models"
 
     def __init__(
             self,
             model: nn.Module,
-            model_kwargs: dict,
             out_dir: Path,
             name: str,
             criterion: type = nn.CrossEntropyLoss,
             optimizer: type = torch.optim.AdamW,
             scheduler: type = torch.optim.lr_scheduler.ReduceLROnPlateau,
             gpu: int = 0,
+            do_init: bool = True,
             batch_size: int = None,
             dtypes: tuple[torch.dtype] = (torch.float32, torch.int64),
+            model_kwargs: dict = None,
             criterion_kwargs: dict = None,
             optimizer_kwargs: dict = None,
             scheduler_kwargs: dict = None,
             pbar: cdu.TreeBar = cdu.classes.NullObject(),
     ):
         name = cdu.clean_name(Path(name)).stem
-        out_dir = out_dir.joinpath("models")
-        self.my_dir = out_dir.joinpath(model.__name__, name)
-        self.test_dir = self.my_dir.joinpath("test")
+        out_dir = (
+            out_dir if self._DIR in out_dir.parts else (out_dir / self._DIR))
+        self.my_dir = out_dir / model.__name__ / name
+        self.out_h5 = self.my_dir / "validation.h5"
 
         # set instance variables
         self.device = utils.get_device(gpu)
@@ -149,28 +158,26 @@ class CoreTrainer(ABC):
 
         # prepare reset dict and initialize trainable parameters
         self._cfg = {
-            self._M: (model, model_kwargs),
+            self._M: (model, model_kwargs or {}),
             self._C: (criterion, criterion_kwargs or {}),
             self._O: (optimizer, optimizer_kwargs or {}),
             self._S: (scheduler, scheduler_kwargs or {})}
 
-        # load existing configuration
+        # save current configuration for reproducibility and reuse
         config_yaml = self.my_dir.joinpath(f"{name}_config.yaml")
         if config_yaml.is_file():
             config = cdu_f.yamls.from_yaml(config_yaml)
             for k, (_, v) in config.items():
                 self._cfg[k] = (self._cfg[k][0], v)
-
-        # save configuration for reuse
         else:
             self.my_dir.mkdir(exist_ok=True, parents=True)
-            self.test_dir.mkdir(exist_ok=True, parents=True)
             cdu_f.yamls.to_yaml(
                 config_yaml, {
                     k: [f"{c.__module__}.{c.__qualname__}", d]
                     for k, (c, d) in self._cfg.items()})
 
-        self._initialize()
+        if do_init:
+            self._initialize()
 
     @abstractmethod
     def _step_stats(
@@ -227,17 +234,33 @@ class CoreTrainer(ABC):
         """
         pass
 
+    @staticmethod
+    def get_peak_fold(
+            peak_dir: Path
+    ):
+        peak_path = peak_dir / "peak.safetensors"
+        if peak_path.is_file():
+            for f_safe in peak_dir.glob("fold*.safetensors"):
+                if filecmp.cmp(f_safe, peak_path, shallow=False):
+                    return int(f_safe.stem.split(" ")[-1])
+
+        return None
+
     @property
     def peak_fold(
             self
     ):
         """Get fold identity of best performing model during training"""
-        if self.peak_path.is_file():
-            for f_safe in self.my_dir.glob("fold*.safetensors"):
-                if filecmp.cmp(f_safe, self.peak_path, shallow=False):
-                    return int(f_safe.stem.split(" ")[-1])
+        return self.get_peak_fold(self.my_dir)
 
-        return None
+    @property
+    def is_trained(
+            self
+    ):
+        check = (
+            self.peak_path.with_suffix(utils._SAFE).is_file() and
+            not self.ckpt_path.with_suffix(utils._SAFE).is_file())
+        return check
 
     def _plot(
             self

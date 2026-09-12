@@ -179,8 +179,8 @@ def rotate_3d(
         seconds: float = 10,
         fps: int = 20,
         aspect: tuple[float, ...] = (1, 1, 1),
-        bounds: dict = dict(),
-        labels: dict = dict()
+        bounds: dict = None,
+        labels: dict = None
 ):
     def _rotate(idx):
         azimuth = (360 * idx / (fps * seconds)) - 180
@@ -189,11 +189,13 @@ def rotate_3d(
 
     for ax in [a for a in fig.axes if a.name == "3d"]:
         ax.set_box_aspect(aspect)
-        for axis, _bound in bounds.items():
+        for axis, _bound in (bounds or {}).items():
             getattr(ax, f"set_{axis}lim")(*_bound)
 
-        for axis, _label in labels.items():
+        for axis, _label in (labels or {}).items():
             getattr(ax, f"set_{axis}label")(_label)
+            if "PC" in _label:
+                getattr(ax, f"set_{axis}ticklabels")([])
 
     root_dir.mkdir(exist_ok=True, parents=True)
     anim = FuncAnimation(
@@ -201,49 +203,26 @@ def rotate_3d(
     anim.save(root_dir / f"{name}.gif", writer=PillowWriter(fps=fps))
 
 
-# def scatter3d():
-#     _n, _k = 150, 200
-#
-#     # KD-tree over the actual observations
-#     _tree = cKDTree(_e)
-#
-#     # Grid used only for rendering
-#     _x = np.linspace(_e[:, 0].min(), _e[:, 0].max(), _n)
-#     _y = np.linspace(_e[:, 1].min(), _e[:, 1].max(), _n)
-#     X, Y = np.meshgrid(_x, _y, indexing="ij")
-#     _grid = np.column_stack([X.ravel(), Y.ravel()])
-#
-#     # Find k nearest observations at each grid location
-#     _, idx = _tree.query(_grid, k=_k)
-#
-#     # Local mean z
-#     Z = prob["fold_2"][:, 1][idx].mean(axis=1).reshape(X.shape)
-#     _tot_idx = []
-#     for c in np.unique(y_true):
-#         fig = plt.figure(figsize=(12, 9))
-#         ax = fig.add_subplot(111, projection="3d")
-#         ax.plot_surface(
-#             X, Y, Z, cmap="viridis", linewidth=0, antialiased=True, alpha=0.5)
-#
-#         _idx = np.flatnonzero(y_true == c)
-#         _idx = cdu_a.rng.choice(
-#             _idx, size=min(n_points, _idx.size), replace=False)
-#         _tot_idx.append(_idx)
-#         ax.scatter(
-#             _l[_idx, 0], _l[_idx, 1], prob["fold_local"][:, 1][_idx],
-#             c=np.where(_p[_idx] == c, "green", "red"), s=20, alpha=0.8)
-#
-#         ax.set_xlabel(f"PC0: {raw_var[0]:.2%}")
-#         ax.set_ylabel(f"PC1: {raw_var[1]:.2%}")
-#         ax.set_zlabel("")
-#         # fig.colorbar(surf, ax=ax, label=f"P(foreground | {f_h5.stem})")
-#         plt.show()
-#
-#         # Keep the same limits throughout the animation
-#         ax.set_xlim(min(X.min(), _l[:, 0].min()), max(X.max(), _l[:, 0].max()))
-#         ax.set_ylim(min(Y.min(), _l[:, 1].min()), max(Y.max(), _l[:, 1].max()))
-#         ax.set_zlim(0, 1)
-#         rotate(fig, ax).save(
-#             root / f"{f_h5.stem} class {c} rotation.gif",
-#             writer=PillowWriter(fps=25))
-#         plt.close(fig)
+def surfaceplot(
+        data: np.ndarray,
+        ax: plt.Axes,
+        z: np.ndarray = None,
+        n: int = 150,
+        k: int = 200,
+        bounds: np.ndarray = None,
+        **kwargs
+):
+    # KD-tree over the actual observations
+    bounds = bounds if bounds is not None else np.stack(
+        (data.min(axis=0), data.max(axis=0)), axis=1)
+    z = z if z is not None else data[:, -1]
+    x, y = np.meshgrid(
+        np.linspace(*bounds[0], n), np.linspace(*bounds[1], n), indexing="ij")
+
+    # Find k nearest observations at each grid location
+    _, idx = cKDTree(data[:, :2]).query(
+        np.column_stack([x.ravel(), y.ravel()]), k=k)
+    surface = ax.plot_surface(
+        x, y, z[idx].mean(axis=1).reshape(x.shape), cmap="rocket", linewidth=0,
+        antialiased=True, alpha=0.5, **kwargs)
+    return ax, surface

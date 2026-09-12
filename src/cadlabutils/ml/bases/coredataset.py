@@ -51,7 +51,7 @@ class CoreDataset(Dataset):
         Metadata variable to use as ground truth label for classification.
         Defaults to None.
     _parent : CoreDataset, optional
-        Another CoreDataset instancefrom which to access underlying data.
+        Another CoreDataset instance from which to access underlying data.
         Defaults to None.
     **kwargs
         key : int | str
@@ -282,6 +282,13 @@ class CoreDataset(Dataset):
             [idx]].reset_index(drop=False).iloc[0]
         item = item if self.parent is None else self.parent[item]
         return item
+
+    def __getattr__(self, name):
+        """Make parent attributes visible from a subset dataset."""
+        if self._parent is not None:
+            return getattr(self._parent, name)
+
+        raise AttributeError(name)
 
     def __add__(
             self,
