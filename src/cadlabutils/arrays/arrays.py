@@ -765,6 +765,44 @@ def corr_coef(
     return corr_matrix
 
 
+def one_vs_rest_matrix(
+        arr_t: np.ndarray,
+        arr_l: np.ndarray,
+):
+    """Compute one-vs-rest confusion categories on paired class labels.
+
+    Parameters
+    ----------
+    arr_t : np.ndarray
+        Boolean array of target class labels. The positive class is True.
+    arr_l : np.ndarray
+        Boolean array of predicted class labels. The negative class is False.
+        Shape must match `arr_t'.
+
+    Returns
+    -------
+    table : dict[str, np.ndarray]
+        Contains keys "tp", "fn", "tn", and "fp". Associated value is a binary
+        array the same shape as `arr_t` where indices that match the category
+        are 1 and all other values are 0.
+
+    Examples
+    --------
+    >>> test_tar = np.array([0, 1, 2, 1, 0, 2, 1])
+    >>> test_lab = np.array([1, 1, 2, 1, 0, 3, 0])
+    >>> one_vs_rest_matrix(
+    ...     test_tar == 1, test_lab == 1)  # doctest: +NORMALIZE_WHITESPACE
+    {'tp': array([0, 1, 0, 1, 0, 0, 0]), 'fn': array([0, 0, 0, 0, 0, 0, 1]),
+     'tn': array([0, 0, 1, 0, 1, 1, 0]), 'fp': array([1, 0, 0, 0, 0, 0, 0])}
+    """
+    table = {
+        "tp": (arr_t & arr_l).astype(int),
+        "fn": (arr_t & ~arr_l).astype(int),
+        "tn": (~arr_t & ~arr_l).astype(int),
+        "fp": (~arr_t & arr_l).astype(int)}
+    return table
+
+
 def _null_pca(
         arr: np.ndarray,
         repeat: int = 10,

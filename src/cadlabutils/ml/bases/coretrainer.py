@@ -234,24 +234,18 @@ class CoreTrainer(ABC):
         """
         pass
 
-    @staticmethod
-    def get_peak_fold(
-            peak_dir: Path
-    ):
-        peak_path = peak_dir / "peak.safetensors"
-        if peak_path.is_file():
-            for f_safe in peak_dir.glob("fold*.safetensors"):
-                if filecmp.cmp(f_safe, peak_path, shallow=False):
-                    return int(f_safe.stem.split(" ")[-1])
-
-        return None
-
     @property
     def peak_fold(
             self
     ):
         """Get fold identity of best performing model during training"""
-        return self.get_peak_fold(self.my_dir)
+        peak_path = self.peak_path.with_suffix(utils._SAFE)
+        if self.is_trained:
+            for f_safe in self.my_dir.glob("fold*.safetensors"):
+                if filecmp.cmp(f_safe, peak_path, shallow=False):
+                    return int(f_safe.stem.split(" ")[-1])
+
+        return None
 
     @property
     def is_trained(
