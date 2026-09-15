@@ -283,13 +283,6 @@ class CoreDataset(Dataset):
         item = item if self.parent is None else self.parent[item]
         return item
 
-    def __getattr__(self, name):
-        """Make parent attributes visible from a subset dataset."""
-        if self._parent is not None:
-            return getattr(self._parent, name)
-
-        raise AttributeError(name)
-
     def __add__(
             self,
             other
