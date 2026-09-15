@@ -30,68 +30,54 @@ _SAVE_KWARGS = {"dpi": 300, "bbox_inches": "tight", "pad_inches": 0}
 
 def style_ax(
         ax: plt.Axes,
-        x_label: str = None,
-        y_label: str = None,
-        x_ticks: tuple[float, ...] = None,
-        y_ticks: tuple[float, ...] = None,
-        x_color: str = None,
-        y_color: str = None,
-        x_cross: float = 0,
-        y_cross: float = 0,
-        x_round: int = None,
-        y_round: int = None,
-        tick_size: int = 30,
-        label_size: int = 25,
+        title: str = None,
+        tick_size: int = 15,
+        label_size: int = 15,
         label_weight: str = "bold",
         label_color: str = "black",
-        line_width: int = 5,
+        line_width: int = 2.5,
         draw_yx: bool = False,
-        symmetric_bounds: bool = False
+        aspect: tuple = None,
+        **kwargs
 ):
+    ax.tick_params(
+        axis="both", which="major", labelsize=tick_size, width=line_width)
     for spine in ax.spines.values():
         spine.set(color=label_color, linewidth=line_width)
-    for axis, label, ticks, color, cross, p_10 in (
-            ("x", x_label, x_ticks, x_color, y_cross, x_round),
-            ("y", y_label, y_ticks, y_color, x_cross, y_round)):
-        if label is not None:
-            getattr(ax, f"set_{axis}label")(
-                label, fontsize=label_size, fontweight=label_weight,
-                color=label_color)
-        if ticks is None and p_10 is not None:
-            p_min, p_max = getattr(ax.dataLim, f"interval{axis}")
-            _p = np.max(np.abs((p_min, p_max)))
-            p_min, p_max = (-_p, _p) if symmetric_bounds else (p_min, p_max)
-            p_mid = np.floor(
-                (p_min + p_max) / 2 * (10 ** p_10)) / (10 ** p_10)
-            p_mid = np.unique([p_mid, 0 if p_min < 0 < p_max else p_mid])
-            ticks = (
-                np.floor(p_min * (10 ** p_10)) / (10 ** p_10), *p_mid,
-                np.ceil(p_max * (10 ** p_10)) / (10 ** p_10))
 
-        if ticks is not None:
-            getattr(ax, f"set_{axis}lim")(ticks[0], ticks[-1])
-            getattr(ax, f"set_{axis}ticks")(ticks)
-            bounds = getattr(ax, f"get_{axis}lim")()
-            if cross is not None and bounds[0] < cross < bounds[1]:
-                l, s = ("h", "bottom") if axis == "y" else ("v", "left")
-                getattr(ax, f"ax{l}line")(
-                    cross, color="black", linewidth=line_width, zorder=0)
-                ax.spines[s].set_visible(False)
-        if color is not None:
-            getattr(ax, f"{axis}axis").label.set_color(color)
+    if title is not None:
+        ax.set_title(title)
+
+    for axis in ("z", "y", "x"):
+        _k = {
+            k.split("_", maxsplit=1)[1]: v for k, v in kwargs.items()
+            if k.lower().startswith(f"{axis}_")}
+        if "label" in _k:
+            getattr(ax, f"set_{axis}label")(
+                _k["label"], fontsize=label_size, fontweight=label_weight,
+                color=_k["color"] if "color" in _k else label_color)
+        if "lim" in _k:
+            getattr(ax, f"set_{axis}lim")(_k["lim"][0], _k["lim"][-1])
+        if "ticks" in _k:
+            if "lim" not in _k:
+                getattr(ax, f"set_{axis}lim")(_k["ticks"][0], _k["ticks"][-1])
+
+            getattr(ax, f"set_{axis}ticks")(_k["ticks"])
+        if "ticklabels" in _k:
+            getattr(ax, f"set_{axis}ticklabels")(_k["ticklabels"])
+        if "cross" in _k and axis != "z":
+            side = "left" if axis == "y" else "bottom"
+            ax.spines[side].set_position(('data', _k["cross"]))
 
     if draw_yx:
         xmin, xmax = ax.get_xlim()
         ymin, ymax = ax.get_ylim()
         lo, hi = max(xmin, ymin), min(xmax, ymax)
         ax.plot([lo, hi], [lo, hi], linestyle="--", color="gray", zorder=0)
-    if x_ticks is not None and x_ticks == y_ticks:
-        ax.set_aspect('equal', adjustable='box')
 
-    # Bold tick labels (can control independently)
-    ax.tick_params(
-        axis="both", which="major", labelsize=tick_size, width=line_width,
-        colors=label_color)
+    if aspect is not None:
+        ax.set_box_aspect(aspect)
+
     return ax
 
 
@@ -176,26 +162,13 @@ def rotate_3d(
         name: str,
         root_dir: Path,
         elev: float = 25,
-        seconds: float = 10,
-        fps: int = 20,
-        aspect: tuple[float, ...] = (1, 1, 1),
-        bounds: dict = None,
-        labels: dict = None
+        seconds: float = 5,
+        fps: int = 20
 ):
     def _rotate(idx):
         azimuth = (360 * idx / (fps * seconds)) - 180
         for ax in [a for a in fig.axes if a.name == "3d"]:
             ax.view_init(elev=elev, azim=azimuth)
-
-    for ax in [a for a in fig.axes if a.name == "3d"]:
-        ax.set_box_aspect(aspect)
-        for axis, _bound in (bounds or {}).items():
-            getattr(ax, f"set_{axis}lim")(*_bound)
-
-        for axis, _label in (labels or {}).items():
-            getattr(ax, f"set_{axis}label")(_label)
-            if "PC" in _label:
-                getattr(ax, f"set_{axis}ticklabels")([])
 
     root_dir.mkdir(exist_ok=True, parents=True)
     anim = FuncAnimation(
@@ -209,15 +182,16 @@ def surfaceplot(
         z: np.ndarray = None,
         n: int = 150,
         k: int = 200,
-        bounds: np.ndarray = None,
+        x_lim: tuple = None,
+        y_lim: tuple = None,
         **kwargs
 ):
     # KD-tree over the actual observations
-    bounds = bounds if bounds is not None else np.stack(
-        (data.min(axis=0), data.max(axis=0)), axis=1)
+    x_lim = x_lim if x_lim is not None else (data[0].min(), data[0].max())
+    y_lim = y_lim if y_lim is not None else (data[1].min(), data[1].max())
     z = z if z is not None else data[:, -1]
     x, y = np.meshgrid(
-        np.linspace(*bounds[0], n), np.linspace(*bounds[1], n), indexing="ij")
+        np.linspace(*x_lim, n), np.linspace(*y_lim, n), indexing="ij")
 
     # Find k nearest observations at each grid location
     _, idx = cKDTree(data[:, :2]).query(
