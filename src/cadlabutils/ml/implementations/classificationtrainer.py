@@ -140,7 +140,8 @@ class ClassificationTrainer(CoreTrainer):
         with cdu_f.h5s.File(self.out_h5, "r") as prob:
             for k_fold, k_label in folds.items():
                 c_dict, c_df = {}, {}
-                embed, labels = prob[str(k_fold)][:], prob[str(k_label)][:]
+                embed = prob[f"{k_fold}_embeddings"][:]
+                labels = prob[str(k_label)][:]
                 classes = np.unique(labels)
                 for c in classes:
                     s = embed[labels == c]
