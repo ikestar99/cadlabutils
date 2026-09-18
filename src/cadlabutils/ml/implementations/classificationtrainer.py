@@ -144,7 +144,7 @@ class ClassificationTrainer(CoreTrainer):
                 classes = np.unique(labels)
                 for c in classes:
                     s = embed[labels == c]
-                    c_df[c] = s.mean(axis=0), s.var(axis=0), s.shape(0)
+                    c_df[c] = s.mean(axis=0), s.var(axis=0), s.shape[0]
 
                 for i, c_0 in enumerate(classes[:-1]):
                     for c_1 in classes[i + 1:]:
