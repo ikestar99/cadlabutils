@@ -8,6 +8,7 @@ Created on Wed Jan 22 09:00:00 2025
 
 # 2. Third-party library imports
 import numpy as np
+import pandas as pd
 import torch
 
 # 3. Local application / relative imports
@@ -118,3 +119,49 @@ class ClassificationTrainer(CoreTrainer):
         self.zarr[tuple(self.coords + [epoch, subset, int(not train)])] = stats
         self.soft.zero_()
         self.hard.zero_()
+
+    def extract_separability(
+            self,
+            folds: dict
+    ):
+        """Extract embedding separability effect sizes per class.
+
+        Parameters
+        ----------
+        folds : dict
+            Dictionary pairing the key of each embedding matrix in instance
+            embedding .h5 file with the
+            corresponding
+        """
+        if not self.out_h5.is_file():
+            return
+
+        tot_df = []
+        with cdu_f.h5s.File(self.out_h5, "r") as prob:
+            for k_fold, k_label in folds.items():
+                c_df = {}
+                embed, labels = prob[k_fold][:], prob[k_label][:]
+                classes = np.unique(labels)
+                for c in classes:
+                    s = embed[labels == c]
+                    c_df[c] = s.mean(axis=0), s.var(axis=0), s.shape(0)
+
+                for i, c_0 in enumerate(classes[:-1]):
+                    for c_1 in classes[i + 1:]:
+                        x_0, v_0, n_0 = embed[c_0]
+                        x_1, v_1, n_1 = embed[c_1]
+                        tot_df[f"{c_0}-{c_1}"] = (x_1 - x_0) / (
+                            (((v_1 * (n_1 - 1) + (v_0 * (n_0 - 1))) /
+                              (n_1 + n_0 - 2)) ** 0.5))
+
+                c_df = pd.DataFrame(tot_df).T.reset_index(
+                    drop=False, names="c-c")
+                c_df = c_df.rename(columns={
+                    k: f"e{k}" for k in c_df.columns if k != "c-c"}).assign(
+                    fold=k_fold)
+                tot_df.append(c_df)
+
+        tot_df = pd.concat(tot_df)
+        tot_df[["c_0", "c_1"]] = tot_df["c-c"].str.split("-", n=1, expand=True)
+        tot_df.drop(columns="c-c").assign(name=self.names[-1]).to_csv(
+            self.my_dir / "embedding cohen.csv", index=False)

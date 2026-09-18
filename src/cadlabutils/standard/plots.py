@@ -24,7 +24,9 @@ from scipy.spatial import cKDTree
 # set style and colors
 sns.set_theme(
     style="ticks", palette="rocket",
-    rc={"axes.spines.right": False, "axes.spines.top": False})
+    rc={
+        "axes.spines.right": False, "axes.spines.top": False,
+        "axes.facecolor": (0, 0, 0, 0)})
 _SAVE_KWARGS = {"dpi": 300, "bbox_inches": "tight", "pad_inches": 0}
 
 
@@ -49,9 +51,10 @@ def style_ax(
         ax.set_title(title)
 
     for axis in ("z", "y", "x"):
+        side = "left" if axis == "y" else "bottom"
         _k = {
             k.split("_", maxsplit=1)[1]: v for k, v in kwargs.items()
-            if k.lower().startswith(f"{axis}_")}
+            if v is not None and k.lower().startswith(f"{axis}_")}
         if "label" in _k:
             getattr(ax, f"set_{axis}label")(
                 _k["label"], fontsize=label_size, fontweight=label_weight,
@@ -66,8 +69,10 @@ def style_ax(
         if "ticklabels" in _k:
             getattr(ax, f"set_{axis}ticklabels")(_k["ticklabels"])
         if "cross" in _k and axis != "z":
-            side = "left" if axis == "y" else "bottom"
             ax.spines[side].set_position(('data', _k["cross"]))
+        if "visible" in _k and not _k["visible"] and axis != "z":
+            getattr(ax, f"{axis}axis").set_visible(False)
+            ax.spines[side].set_visible(False)
 
     if draw_yx:
         xmin, xmax = ax.get_xlim()
