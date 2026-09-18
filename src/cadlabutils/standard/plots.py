@@ -52,6 +52,7 @@ def style_ax(
 
     for axis in ("z", "y", "x"):
         side = "left" if axis == "y" else "bottom"
+        other = "y" if axis == "x" else "x"
         _k = {
             k.split("_", maxsplit=1)[1]: v for k, v in kwargs.items()
             if v is not None and k.lower().startswith(f"{axis}_")}
@@ -70,6 +71,12 @@ def style_ax(
             getattr(ax, f"set_{axis}ticklabels")(_k["ticklabels"])
         if "cross" in _k and axis != "z":
             ax.spines[side].set_position(('data', _k["cross"]))
+            ax.tick_params(axis=axis, which="both", direction="inout")
+            transform = getattr(ax, f"get_{axis}axis_transform")()
+            for label in getattr(ax, f"get_{axis}ticklabels")():
+                label.set_transform(transform)
+                getattr(label, f"set_{other}")(-0.02)
+
         if "visible" in _k and not _k["visible"] and axis != "z":
             getattr(ax, f"{axis}axis").set_visible(False)
             ax.spines[side].set_visible(False)
