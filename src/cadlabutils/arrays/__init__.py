@@ -11,6 +11,7 @@ import warnings
 
 # 3. Local application / relative imports
 from .arrays import *
+from .embedding import *
 from .slicing import *
 from .geometry import *
 from .dataframes import *
