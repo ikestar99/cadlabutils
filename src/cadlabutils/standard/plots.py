@@ -26,8 +26,10 @@ sns.set_theme(
     style="ticks", palette="rocket",
     rc={
         "axes.spines.right": False, "axes.spines.top": False,
-        "axes.facecolor": "#EAEAF2", "grid.color": "white",
-        "grid.linewidth": 1})  # "axes.facecolor": (0, 0, 0, 0)})
+        # "axes.facecolor": "#EAEAF2", "grid.color": "white",
+        # "grid.linewidth": 1,
+        "grid.linewidth": 0, "axes.facecolor": (0, 0, 0, 0)
+    })
 _SAVE_KWARGS = {"dpi": 300, "bbox_inches": "tight", "pad_inches": 0}
 
 
