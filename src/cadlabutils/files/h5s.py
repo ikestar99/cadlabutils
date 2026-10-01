@@ -67,7 +67,7 @@ def get_tree(
 
     >> test_tree = get_tree(Path(".../file.h5"))
     >> print_tree(test_tree, color=False)
-    data
+    tree
     ├── mask
     │   ├── shape: (1, 147, 5797, 3921)
     │   └── dtype: uint8
