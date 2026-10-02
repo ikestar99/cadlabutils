@@ -79,7 +79,7 @@ class SWCGraph:
     C_R = "radius"
     C_U = "parent"
     C_ALL = [C_N, C_T] + C_XYZ + [C_R, C_U]
-    COLORS = ["black", "#99D5C9", "#C49762"]  # "#0C7BDC", "#FFC20A"]
+    COLORS = ["white", "#99D5C9", "#C49762"]  # "#0C7BDC", "#FFC20A"]
 
     def __init__(
             self,
@@ -481,7 +481,7 @@ class SWCGraph:
             idx = np.argmax(self.type == 1)
             ax.scatter(
                 coords[idx, -1], coords[idx, -2], c=self.COLORS[0],
-                s=self.data.iloc[idx][self.C_R], zorder=3)
+                s=self.data.iloc[idx][self.C_R] * scale, zorder=3)
 
         return ax
 
