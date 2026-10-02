@@ -79,7 +79,7 @@ class SWCGraph:
     C_R = "radius"
     C_U = "parent"
     C_ALL = [C_N, C_T] + C_XYZ + [C_R, C_U]
-    COLORS = ["white", "#99D5C9", "#C49762"]  # "#0C7BDC", "#FFC20A"]
+    COLORS = ["white", "#99D5C9", "#C49762", "#C49762", "#C49762"]
 
     def __init__(
             self,
