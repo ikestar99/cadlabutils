@@ -111,7 +111,7 @@ def save_fig(
 def ridgeplot(
         data: pd.DataFrame,
         x: str,
-        ax,
+        ax: plt.Axes,
         hue: str,
         hue_order: list,
         palette: dict,
@@ -148,6 +148,27 @@ def ridgeplot(
             va="center")
 
     return ax, peak, (min(_x), max(_x))
+
+
+def scoxplot(
+        data: pd.DataFrame,
+        x: str,
+        y: str,
+        hue: str,
+        ax: plt.Axes,
+        alpha: float = 0.5,
+        order: list = None,
+        hue_order: list = None,
+        palette: dict = None
+):
+    sns.stripplot(
+        data, x=x, y=y, ax=ax, hue=hue, legend=False, clip_on=False, zorder=2,
+        alpha=alpha, order=order, hue_order=hue_order, palette=palette)
+    sns.boxplot(
+        data, x=x, y=y, ax=ax, hue=hue, linewidth=5, showfliers=False,
+        fill=False, zorder=1, width=0.5, order=order, hue_order=hue_order,
+        legend=False, palette={k: "gray" for k in palette})
+    return ax
 
 
 def fig_to_im(
