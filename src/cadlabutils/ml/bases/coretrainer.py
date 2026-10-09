@@ -247,15 +247,6 @@ class CoreTrainer(ABC):
 
         return None
 
-    @property
-    def is_trained(
-            self
-    ):
-        check = (
-            self.peak_path.with_suffix(utils._SAFE).is_file() and
-            not self.ckpt_path.with_suffix(utils._SAFE).is_file())
-        return check
-
     def _plot(
             self
     ):
@@ -453,6 +444,17 @@ class CoreTrainer(ABC):
         cdu_f.csvs.append_data(file=self.my_csv, data=stats, index=False)
         cdu_f.csvs.append_data(file=self.stat_csv, data=stats, index=False)
         return data[-2], data[-1]
+
+    def is_trained(
+            self,
+            fold: int = None
+    ):
+        check = all((
+            self.peak_path.with_suffix(utils._SAFE).is_file(),
+            not self.ckpt_path.with_suffix(utils._SAFE).is_file(),
+            (fold is None) or (self.my_dir / f"fold {fold}").with_suffix(
+                utils._SAFE).is_file()))
+        return check
 
     def pull_stats(
             self,
