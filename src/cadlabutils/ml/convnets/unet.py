@@ -9,6 +9,7 @@ Created on Wed Apr 30 09:00:00 2025
 # 2. Third-party library imports
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # 3. Local application / relative imports
 from .. import make_block, make_dense
@@ -260,6 +261,8 @@ class _UNetClassifier(_UNet):
             make_dense([self.c_f, *d_l], norm=True, act=act_l, drop=drop_l),
             nn.Linear(d_l[-1], c_o))
         self.return_embedding = False
+        self.expand = False
+        self.foreground_only = False
 
     def forward(
             self,
@@ -276,9 +279,15 @@ class _UNetClassifier(_UNet):
         -------
         x : torch.tensor
         """
+        v = x.shape
         x = self.avg(super(_UNetClassifier, self).forward(x, decode=False))
         x = torch.flatten(x, start_dim=1)
         o = self.dense(x)
+
+        # output post-processing
+        o = 1 - F.softmax(o, dim=1)[:, :1] if self.foreground_only else o
+        o = o if not self.expand else o.reshape(
+            *o.shape, *([1] * (len(v) - o.ndim))).expand(*o.shape, *v[2:])
         return (o, x) if self.return_embedding else o
 
 

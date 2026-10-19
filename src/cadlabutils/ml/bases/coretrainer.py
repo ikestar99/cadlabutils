@@ -296,17 +296,19 @@ class CoreTrainer(ABC):
             self.p_bar.update(self._GPU, completed=g_r)
 
     def _initialize(
-            self
+            self,
+            train: bool = True
     ):
         """Reinitialize trainable parameters."""
         self.model = self._cfg[self._M][0](**self._cfg[self._M][1])
         utils.set_mode(
-            self.model, train=True, device=self.device, dtype=self.dtypes[0])
-        self.criterion = self._cfg[self._C][0](**self._cfg[self._C][1])
-        self.optimizer = self._cfg[self._O][0](
-            params=self.model.parameters(), **self._cfg[self._O][1])
-        self.scheduler = self._cfg[self._S][0](
-            optimizer=self.optimizer, **self._cfg[self._S][1])
+            self.model, train=train, device=self.device, dtype=self.dtypes[0])
+        if train:
+            self.criterion = self._cfg[self._C][0](**self._cfg[self._C][1])
+            self.optimizer = self._cfg[self._O][0](
+                params=self.model.parameters(), **self._cfg[self._O][1])
+            self.scheduler = self._cfg[self._S][0](
+                optimizer=self.optimizer, **self._cfg[self._S][1])
 
     def _clean_up(
             self,
@@ -456,6 +458,20 @@ class CoreTrainer(ABC):
                 utils._SAFE).is_file()))
         return check
 
+    def prepare_fold(
+            self,
+            fold: int = None
+    ):
+        if not self.is_trained(fold):
+            fold = fold or "best overall model"
+            raise ValueError(f"Requested fold <{fold}> is not trained")
+
+        self._initialize(train=False)
+        utils.load(
+            self.peak_path if fold is None else self.my_dir / f"fold {fold}",
+            self.model, device=self.device)
+        return self
+
     def pull_stats(
             self,
             cols: str | list[str] = None
@@ -571,7 +587,7 @@ class CoreTrainer(ABC):
         if trial is not None:
             self.stat_csv = self.stat_csv.parent / "optim_history.csv"
 
-        self._initialize()
+        self._initialize(train=True)
         self._track_memory()
 
         # simulate optimum batch size
@@ -727,13 +743,8 @@ class CoreTrainer(ABC):
         if self.batch_size is None:
             self.batch_size = int(self.pull_stats().iloc[-1, 6])
 
-        self._initialize()
+        self.prepare_fold(fold)
         self._track_memory()
-        utils.load(
-            self.peak_path if fold is None else self.my_dir / f"fold {fold}",
-            self.model, device=self.device)
-        utils.set_mode(
-            self.model, train=False, device=self.device, dtype=self.dtypes[0])
         eval_loader = DataLoader(
             eval_dataset, batch_size=self.batch_size, num_workers=workers,
             pin_memory=True)
