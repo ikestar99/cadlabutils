@@ -286,8 +286,10 @@ class _UNetClassifier(_UNet):
 
         # output post-processing
         o = 1 - F.softmax(o, dim=1)[:, :1] if self.foreground_only else o
-        o = o if not self.expand else o.reshape(
-            *o.shape, *([1] * (len(v) - o.ndim))).expand(*o.shape, *v[2:])
+        if self.expand:
+            o = o.reshape(*o.shape, *([1] * (len(v) - o.ndim)))
+            o = o.expand(*o.shape, *v[2:]).clone()
+
         return (o, x) if self.return_embedding else o
 
 
