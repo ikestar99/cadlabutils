@@ -417,8 +417,9 @@ class _SNEMIClassifier(_SNEMI):
         if self.expand:
             o = o.reshape(*o.shape, *([1] * (len(v) - o.ndim)))
             print(o.shape)
-            o = o.expand(*o.shape, *v[2:]).clone()
-            print(o.shape)
+            print((*o.shape, *v[2:]))
+            # o = o.expand(*o.shape, *v[2:]).clone()
+            # print(o.shape)
             import sys;
             sys.exit()
 
