@@ -310,6 +310,7 @@ class _OutputModule(nn.Module):
         super(_OutputModule, self).__init__()
         pd = pad_size(ks, mode="same")
         self.output_layers = []
+        self.foreground_only = False
         # self.output_layers = list(outspec.keys())
         for name, d_out in outspec.items():
             setattr(self, name, _Conv(
@@ -436,4 +437,6 @@ class RSUNetMulti(nn.Module):
             # print(f"deconv{d}: {x.shape}")
 
         # Output feature embedding without batchnorm
-        return self.outputdeconv(self.embedconv(x))[0]
+        o = self.outputdeconv(self.embedconv(x))[0]
+        o = 1 - F.softmax(o, dim=1)[:, :1] if self.foreground_only else o
+        return o

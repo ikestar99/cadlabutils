@@ -85,3 +85,29 @@ def arr_slice(
     stop = stop if end is None else np.minimum(stop, end)
     step = np.ones(len(start)) * step if isinstance(step, int) else step
     return tuple(slice(*list(map(int, s))) for s in zip(start, stop, step))
+
+
+def dim_start_end(
+        start: int,
+        width: int,
+        step: int,
+        pad: int,
+        factor: int,
+):
+    if width < np.ceil((step + (2 * pad)) / factor) * factor:
+        raise ValueError(
+            f"Width {width} cannot accommodate step {step} with pad {pad}")
+
+    x0 = max(0, start - pad)
+    x1 = min(width, start + step + pad)
+    if x0 == 0 and (x1 - x0) % factor != 0:
+        x1 += factor - ((x1 - x0) % factor)
+
+    if x1 == width and (x1 - x0) % factor != 0:
+        x0 -= factor - ((x1 - x0) % factor)
+
+    return x0, x1
+
+
+if __name__ == "__main__":
+    print(dim_start_end(384, 512, 384, 64, 64))

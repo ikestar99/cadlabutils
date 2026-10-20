@@ -112,6 +112,7 @@ class _UNet(nn.Module):
         self._extend(
             "bottom", [c_t[-2], c_t[-2], self.c_f], encode=True, decode=True)
         self.final = self._CONV(c_t[0], c_o, kernel_size=1, stride=1)
+        self.foreground_only = False
 
     def _extend(
             self,
@@ -194,6 +195,8 @@ class _UNet(nn.Module):
 
             # final 1x1x1 convolution
             out[0] = self.final(out[0])
+            if self.foreground_only:
+                out[0] = 1 - F.softmax(out[0], dim=1)[:, :1]
 
         return out[0]
 
@@ -262,7 +265,6 @@ class _UNetClassifier(_UNet):
             nn.Linear(d_l[-1], c_o))
         self.return_embedding = False
         self.expand = False
-        self.foreground_only = False
 
     def forward(
             self,

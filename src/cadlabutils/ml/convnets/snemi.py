@@ -243,6 +243,8 @@ class _SNEMI(nn.Module):
             self._extend("encode", i, c_t[i - 1], c_t[i])
             self._extend("decode", i, c_t[i], c_t[i - 1])
 
+        self.foreground_only = False
+
     def _extend(
             self,
             arm: str,
@@ -315,6 +317,9 @@ class _SNEMI(nn.Module):
                 self, f"decode_{self.depth - 1}")(out[self.depth - 1])
             for i in range(self.depth - 2, -1, -1):
                 out[i] = getattr(self, f"decode_{i}")(out[i] + out[i+1])
+
+            if self.foreground_only:
+                out[0] = 1 - F.softmax(out[0], dim=1)[:, :1]
 
         return out[0]
 
