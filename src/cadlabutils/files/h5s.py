@@ -135,7 +135,11 @@ def make_dataset(
     """
     compress = {} if not use_blosc else hdf5plugin.Blosc(
         cname="zstd", clevel=5, shuffle=hdf5plugin.Blosc.SHUFFLE)
+    update = name in base
     dataset = base.require_dataset(
         name, shape=shape, dtype=dtype, chunks=True, fillvalue=fill,
         **compress, **kwargs)
+    if update and "data" in kwargs:
+        dataset[:] = kwargs["data"]
+
     return dataset

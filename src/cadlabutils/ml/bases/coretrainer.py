@@ -137,6 +137,7 @@ class CoreTrainer(ABC):
             optimizer_kwargs: dict = None,
             scheduler_kwargs: dict = None,
             pbar: cdu.TreeBar = cdu.classes.NullObject(),
+            **kwargs
     ):
         name = cdu.clean_name(Path(name)).stem
         out_dir = (
@@ -754,7 +755,8 @@ class CoreTrainer(ABC):
             output, _, _ = utils.forward_pass(
                 self.model, batch[in_idx], device=self.device,
                 sample_dtype=self.dtypes[0], target_dtype=self.dtypes[1])
-            output = [o for o in output] if return_embedding else [output]
+            output = [o for o in output] if return_embedding else [
+                output, None]
             output[0] = F.softmax(output[0], dim=1) if logits else output[0]
             output = tuple([o.detach().cpu().numpy() for o in output])
             self.p_bar.update(task_id, completed=b)

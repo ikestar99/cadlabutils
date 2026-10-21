@@ -31,6 +31,15 @@ class SegmentationTrainer(CoreTrainer):
     cadlabutils.ml.bases.CoreTrainer : Parent class.
     """
 
+    def __init__(
+            self,
+            *args,
+            dtypes: tuple[torch.dtype] = (torch.float32, torch.float32),
+            **kwargs
+    ):
+        super(SegmentationTrainer, self).__init__(
+            *args, dtypes=dtypes, **kwargs)
+
     def _step_stats(
             self,
             output,
