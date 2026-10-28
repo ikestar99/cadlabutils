@@ -758,7 +758,9 @@ class CoreTrainer(ABC):
             output = [o for o in output] if return_embedding else [
                 output, None]
             output[0] = F.softmax(output[0], dim=1) if logits else output[0]
-            output = tuple([o.detach().cpu().numpy() for o in output])
+            output = tuple([
+                o.detach().cpu().numpy() if o is not None else None
+                for o in output])
             self.p_bar.update(task_id, completed=b)
             yield b * self.batch_size, *output
 
