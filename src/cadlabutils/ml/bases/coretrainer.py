@@ -304,6 +304,7 @@ class CoreTrainer(ABC):
         self.model = self._cfg[self._M][0](**self._cfg[self._M][1])
         utils.set_mode(
             self.model, train=train, device=self.device, dtype=self.dtypes[0])
+        self.criterion, self.optimizer, self.scheduler = None, None, None
         if train:
             self.criterion = self._cfg[self._C][0](**self._cfg[self._C][1])
             self.optimizer = self._cfg[self._O][0](
