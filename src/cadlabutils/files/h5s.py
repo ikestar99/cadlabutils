@@ -137,8 +137,8 @@ def make_dataset(
         cname="zstd", clevel=5, shuffle=hdf5plugin.Blosc.SHUFFLE)
     update = name in base
     if "data" in kwargs:
-        shape = kwargs["data"].shape
-        dtype = kwargs["data"].dtype
+        shape = kwargs["data"].shape if shape is None else shape
+        dtype = kwargs["data"].dtype if dtype is None else dtype
 
     dataset = base.require_dataset(
         name, shape=shape, dtype=dtype, chunks=True, fillvalue=fill,
